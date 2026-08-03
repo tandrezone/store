@@ -20,7 +20,7 @@ class OxaPayConfig
             'merchant_api_key' => getenv('OXAPAY_MERCHANT_KEY') ?: 'YOUR_MERCHANT_API_KEY',
             'base_url'         => 'https://api.oxapay.com',
             'sandbox'          => filter_var(getenv('OXAPAY_SANDBOX') ?: 'true', FILTER_VALIDATE_BOOLEAN),
-            'currency'         => 'USD',
+            'currency'         => 'EUR',
             'lifetime_minutes' => 60,
             'callback_url'     => getenv('APP_URL') . '/payment/callback.php',
             'return_url'       => getenv('APP_URL') . '/order-confirmation.php',

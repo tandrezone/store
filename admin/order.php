@@ -46,8 +46,8 @@ require __DIR__ . '/partials/header.php';
             <ul class="order-items-list">
                 <?php foreach ($order['items'] as $item): ?>
                     <li>
-                        <span><?= htmlspecialchars($item['product_name']) ?> — <?= htmlspecialchars((string) $item['pack_qty']) ?> &times; <?= (int) $item['quantity'] ?></span>
-                        <span>$<?= number_format((float) $item['line_total'], 2) ?></span>
+                        <span><?= htmlspecialchars($item['product_name']) ?> — <?= htmlspecialchars(trim($item['label'] . ' ' . $item['unit'])) ?> &times; <?= (int) $item['quantity'] ?></span>
+                        <span><?= number_format((float) $item['line_total'], 2) ?>€</span>
                     </li>
                 <?php endforeach; ?>
             </ul>

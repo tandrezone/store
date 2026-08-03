@@ -110,9 +110,9 @@ class Order
 
             $itemStmt = $pdo->prepare("
                 INSERT INTO order_items
-                    (order_id, variant_id, product_name, pack_qty, unit_price, quantity, line_total)
+                    (order_id, variant_id, product_name, label, unit, unit_price, quantity, line_total)
                 VALUES
-                    (:order_id, :variant_id, :product_name, :label, :unit_price, :quantity, :line_total)
+                    (:order_id, :variant_id, :product_name, :label, :unit, :unit_price, :quantity, :line_total)
             ");
 
             foreach ($items as $item) {
@@ -121,7 +121,8 @@ class Order
                     'order_id'     => $orderId,
                     'variant_id'   => $item['variant_id'],
                     'product_name' => $item['product_name'],
-                    'label'        => $item['label'],
+                    'label'        => $item['label'] !== null ? (string) $item['label'] : null,
+                    'unit'         => $item['unit'] !== null ? (string) $item['unit'] : null,
                     'unit_price'   => $item['price'],
                     'quantity'     => $item['quantity'],
                     'line_total'   => $lineTotal,

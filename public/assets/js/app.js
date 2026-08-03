@@ -67,7 +67,7 @@
                 const item = data.items.find((i) => String(i.variant_id) === String(variantId));
                 if (row && item) {
                     row.querySelector('.line-subtotal').textContent =
-                        '$' + (item.price * item.quantity).toFixed(2);
+                        (item.price * item.quantity).toFixed(2) + '€';
                 } else if (row && !item) {
                     row.remove(); // quantity dropped to 0 and was removed server-side
                 }

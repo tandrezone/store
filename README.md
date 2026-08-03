@@ -38,6 +38,33 @@ loader of your choice, or `putenv()` in a bootstrap file):
 | `APP_URL` | Public base URL, e.g. `https://yourstore.com` (used to build OxaPay callback/return URLs) |
 | `OXAPAY_MERCHANT_KEY` | Your Merchant API key from the OxaPay dashboard |
 | `OXAPAY_SANDBOX` | `true` while testing, `false` when going live |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | `/admin` login. See below. |
+
+A `.env` file in the project root is loaded automatically (via
+`src/bootstrap.php`, wired up through Composer's `files` autoload) —
+values already set in the real process environment always take
+priority over it. Copy `.env` and fill in your own values; nothing
+else needs to source it manually.
+
+### Admin login
+
+The repo ships with a working default so `/admin` isn't locked out of
+the box:
+
+- Username: `admin`
+- Password: `AdminPass123!`
+
+**Change this before deploying.** Generate a new hash and put it in
+`.env`:
+
+```bash
+php -r "echo password_hash('your-new-password', PASSWORD_BCRYPT), PHP_EOL;"
+```
+
+```
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH=<the hash printed above>
+```
 
 ## 4. Running locally
 
@@ -68,6 +95,7 @@ admin/products.php          No-auth product entry screen — protect before depl
 
 ## 6. Before going live — checklist
 
+- [ ] Change the default admin password (see "Admin login" above) — it ships with a known default
 - [ ] Protect `/admin` (see `admin/.htaccess.example`) or replace it with real auth
 - [ ] Re-verify OxaPay's current invoice + webhook contract against
       https://docs.oxapay.com/ — field names and signature verification

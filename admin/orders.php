@@ -57,7 +57,7 @@ require __DIR__ . '/partials/header.php';
                 </td>
                 <td><span class="status-badge" data-status="<?= htmlspecialchars($order['status']) ?>"><?= htmlspecialchars($order['status']) ?></span></td>
                 <td><span class="status-badge" data-status="<?= htmlspecialchars($order['payment_status']) ?>"><?= htmlspecialchars($order['payment_status']) ?></span></td>
-                <td>$<?= number_format((float) $order['total'], 2) ?></td>
+                <td><?= number_format((float) $order['total'], 2) ?>€</td>
                 <td style="color: var(--color-muted); font-size: 0.85rem;"><?= htmlspecialchars((string) $order['created_at']) ?></td>
                 <td><a href="/admin/order.php?id=<?= (int) $order['id'] ?>" class="btn-secondary">Open</a></td>
             </tr>
