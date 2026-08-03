@@ -18,7 +18,7 @@ class GeminiConfig
 
     public static function model(): string
     {
-        return getenv('GEMINI_MODEL') ?: 'gemini-2.0-flash';
+        return getenv('GEMINI_MODEL') ?: 'gemini-flash-latest';
     }
 
     public static function baseUrl(): string

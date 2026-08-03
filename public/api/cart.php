@@ -33,6 +33,17 @@ try {
         case 'update':
             $variantId = (int) ($_POST['variant_id'] ?? 0);
             $quantity = (int) ($_POST['quantity'] ?? 0);
+
+            if ($quantity > 0) {
+                $variant = Variant::find($variantId);
+                if (!$variant) {
+                    throw new InvalidArgumentException('That option is not available.');
+                }
+                if ($variant['stock'] < $quantity) {
+                    throw new InvalidArgumentException('Not enough stock available.');
+                }
+            }
+
             $cart->updateItem($variantId, $quantity);
             break;
 

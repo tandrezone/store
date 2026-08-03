@@ -47,8 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($shipping['country'] === '') $errors[] = 'Country is required.';
 
     if (empty($errors)) {
-        $order = Order::create($shipping, $items);
+        try {
+            $order = Order::create($shipping, $items);
+        } catch (Throwable $e) {
+            $errors[] = $e->getMessage();
+        }
+    }
 
+    if (empty($errors)) {
         $client = new OxaPayClient(OxaPayConfig::get());
 
         try {

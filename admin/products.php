@@ -10,6 +10,7 @@ use Store\Models\Product;
 use Store\Models\Supplier;
 use Store\Models\Variant;
 use Store\Services\AdminAuth;
+use Store\Services\ProductUpdater;
 
 AdminAuth::requireAuth();
 
@@ -19,6 +20,7 @@ $pdo = Database::connection();
 $message = null;
 $messageType = 'success';
 $expandedId = (int) ($_GET['edit'] ?? 0);
+$updateSummary = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['action'] ?? '');
@@ -100,6 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Please fill in all required fields.';
             $messageType = 'error';
         }
+    } elseif ($action === 'run_update') {
+        $updateSummary = ProductUpdater::runAll();
+        $message = 'AI update finished.';
     }
 }
 
@@ -132,6 +137,33 @@ require __DIR__ . '/partials/header.php';
 <?php if ($message): ?>
     <p class="msg <?= $messageType === 'error' ? 'error' : '' ?>"><?= htmlspecialchars($message) ?></p>
 <?php endif; ?>
+
+<?php if ($updateSummary !== null): ?>
+    <div class="panel">
+        <h2>AI update results</h2>
+        <p>
+            processed <?= (int) $updateSummary['processed'] ?> ·
+            updated <?= (int) $updateSummary['updated'] ?> ·
+            skipped <?= (int) $updateSummary['skipped'] ?>
+        </p>
+        <?php if (!empty($updateSummary['errors'])): ?>
+            <ul class="order-items-list">
+                <?php foreach ($updateSummary['errors'] as $error): ?>
+                    <li><span style="color: var(--color-danger);"><?= htmlspecialchars($error) ?></span></li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
+<form method="post" style="margin-bottom: 20px;">
+    <input type="hidden" name="action" value="run_update">
+    <button type="submit" class="btn-primary">✨ Run AI update on imported products</button>
+    <p class="field-hint">
+        Rewrites description copy and reprices every product with status
+        <strong>imported</strong>, then flags it as <strong>update</strong> for review.
+    </p>
+</form>
 
 <details class="panel" <?= $expandedId === 0 && $message === null ? '' : '' ?>>
     <summary class="panel-summary">Add product</summary>

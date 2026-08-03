@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Store\Models;
 
 use PDOException;
+use RuntimeException;
 use Store\Config\Database;
 use Throwable;
 
@@ -74,8 +75,22 @@ class Order
         $pdo->beginTransaction();
 
         try {
+            $stockStmt = $pdo->prepare('SELECT stock FROM product_variants WHERE id = :id FOR UPDATE');
+
             $subtotal = 0.0;
             foreach ($items as $item) {
+                $stockStmt->execute(['id' => $item['variant_id']]);
+                $available = $stockStmt->fetchColumn();
+
+                if ($available === false) {
+                    throw new RuntimeException($item['product_name'] . ' is no longer available.');
+                }
+                if ((int) $available < (int) $item['quantity']) {
+                    throw new RuntimeException(
+                        'Not enough stock for ' . $item['product_name'] . ' — only ' . (int) $available . ' left.'
+                    );
+                }
+
                 $subtotal += (float) $item['price'] * (int) $item['quantity'];
             }
             $subtotal = round($subtotal, 2);

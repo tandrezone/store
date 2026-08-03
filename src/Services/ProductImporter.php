@@ -218,7 +218,9 @@ class ProductImporter
             $label = trim((string) ($variant['label'] ?? '')) ?: null;
             $unit = trim((string) ($variant['unit'] ?? '')) ?: null;
             $price = (float) ($variant['price'] ?? 0);
-            $stock = max(0, (int) ($variant['stock'] ?? 0));
+            // Suppliers that don't track stock send 0 or omit the field —
+            // treat that as effectively unlimited rather than "out of stock".
+            $stock = max(0, (int) ($variant['stock'] ?? 0)) ?: 9999;
 
             $stmt = $pdo->prepare('SELECT id FROM product_variants WHERE sku = :sku');
             $stmt->execute(['sku' => $sku]);
