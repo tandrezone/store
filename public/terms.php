@@ -79,7 +79,7 @@ require __DIR__ . '/partials/header.php';
     <h2>10. Contact</h2>
     <p>
         Questions about these terms can be sent to
-        <a href="mailto:support@yourstore.example">support@yourstore.example</a>.
+        <a href="mailto:support@chemheaven.example">support@chemheaven.example</a>.
     </p>
 
     <p class="updated-note">Last updated August 2026.</p>

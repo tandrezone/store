@@ -7,7 +7,7 @@
             <a href="/support.php">Support</a>
             <a href="/terms.php">Terms &amp; Conditions</a>
         </nav>
-        <p>&copy; <?= date('Y') ?> Store. All rights reserved.</p>
+        <p>&copy; <?= date('Y') ?> ChemHeaven. All rights reserved.</p>
     </div>
 </footer>
 <script src="/assets/js/app.js"></script>

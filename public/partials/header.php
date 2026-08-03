@@ -6,7 +6,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($pageTitle ?? 'Store') ?></title>
+<title><?= htmlspecialchars($pageTitle ?? 'ChemHeaven') ?></title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon-32x32.png">
@@ -17,7 +17,7 @@
 <body>
 <header class="site-header">
     <div class="container header-inner">
-        <a href="/index.php" class="logo">Store</a>
+        <a href="/index.php" class="logo">ChemHeaven</a>
         <nav class="main-nav">
             <a href="/index.php">Shop</a>
             <a href="/cart.php" class="cart-link">

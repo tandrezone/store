@@ -17,7 +17,7 @@
 <body>
 <header class="site-header">
     <div class="container header-inner">
-        <a href="/admin/products.php" class="logo">Store <span class="admin-tag">Admin</span></a>
+        <a href="/admin/products.php" class="logo">ChemHeaven <span class="admin-tag">Admin</span></a>
         <nav class="main-nav">
             <a href="/admin/products.php" class="<?= ($activeNav ?? '') === 'products' ? 'active' : '' ?>">Products</a>
             <a href="/admin/suppliers.php" class="<?= ($activeNav ?? '') === 'suppliers' ? 'active' : '' ?>">Suppliers</a>

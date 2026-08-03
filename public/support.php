@@ -11,7 +11,7 @@ require __DIR__ . '/partials/header.php';
 
     <h2>Contact us</h2>
     <p>
-        Email <a href="mailto:support@yourstore.example">support@yourstore.example</a>
+        Email <a href="mailto:support@chemheaven.example">support@chemheaven.example</a>
         and include your order number and the email address used at checkout — that's
         the fastest way for us to look up an order. We aim to reply within 1–2
         business days.
