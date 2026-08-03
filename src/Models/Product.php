@@ -139,7 +139,7 @@ class Product
     public static function variantsForProduct(int $productId): array
     {
         $stmt = Database::connection()->prepare("
-            SELECT id, sku, label, unit, price, stock
+            SELECT id, sku, label, unit, price, IF(price <= 0, 0, stock) AS stock
             FROM product_variants
             WHERE product_id = :product_id AND is_active = 1
             ORDER BY id ASC

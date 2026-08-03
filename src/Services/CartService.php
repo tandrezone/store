@@ -84,7 +84,7 @@ class CartService
         $cartId = $this->cartId();
         $stmt = $this->pdo->prepare("
             SELECT ci.variant_id, ci.quantity,
-                   v.sku, v.label, v.unit, v.price, v.stock,
+                   v.sku, v.label, v.unit, v.price, IF(v.price <= 0, 0, v.stock) AS stock,
                    p.id AS product_id, p.name AS product_name, p.image_path
             FROM cart_items ci
             JOIN product_variants v ON v.id = ci.variant_id

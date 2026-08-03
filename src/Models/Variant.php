@@ -11,7 +11,8 @@ class Variant
     public static function find(int $id): ?array
     {
         $stmt = Database::connection()->prepare("
-            SELECT v.id, v.product_id, v.sku, v.label, v.unit, v.price, v.stock,
+            SELECT v.id, v.product_id, v.sku, v.label, v.unit, v.price,
+                   IF(v.price <= 0, 0, v.stock) AS stock,
                    p.name AS product_name
             FROM product_variants v
             JOIN products p ON p.id = v.product_id

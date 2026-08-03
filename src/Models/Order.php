@@ -75,19 +75,23 @@ class Order
         $pdo->beginTransaction();
 
         try {
-            $stockStmt = $pdo->prepare('SELECT stock FROM product_variants WHERE id = :id FOR UPDATE');
+            $stockStmt = $pdo->prepare('SELECT stock, price FROM product_variants WHERE id = :id FOR UPDATE');
 
             $subtotal = 0.0;
             foreach ($items as $item) {
                 $stockStmt->execute(['id' => $item['variant_id']]);
-                $available = $stockStmt->fetchColumn();
+                $variantRow = $stockStmt->fetch();
 
-                if ($available === false) {
+                if ($variantRow === false) {
                     throw new RuntimeException($item['product_name'] . ' is no longer available.');
                 }
-                if ((int) $available < (int) $item['quantity']) {
+
+                // A variant with no real price isn't for sale — treat it as out of stock.
+                $available = (float) $variantRow['price'] <= 0.0 ? 0 : (int) $variantRow['stock'];
+
+                if ($available < (int) $item['quantity']) {
                     throw new RuntimeException(
-                        'Not enough stock for ' . $item['product_name'] . ' — only ' . (int) $available . ' left.'
+                        'Not enough stock for ' . $item['product_name'] . ' — only ' . $available . ' left.'
                     );
                 }
 
