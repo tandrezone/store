@@ -21,21 +21,46 @@ class DefaultProductImage
      */
     public static function pathFor(array $product): string
     {
-        $name = trim((string) ($product['name'] ?? '')) ?: 'Product';
-        $id = (int) ($product['id'] ?? 0);
-        $filename = $id . '-' . substr(md5($name), 0, 8) . '.jpg';
-
-        $dir = __DIR__ . '/../../public/' . self::PUBLIC_SUBDIR;
-        $fullPath = $dir . '/' . $filename;
+        $fullPath = self::fullPathFor($product);
 
         if (!is_file($fullPath)) {
+            $dir = dirname($fullPath);
             if (!is_dir($dir)) {
                 mkdir($dir, 0775, true);
             }
-            self::render($name, $fullPath);
+            self::render(self::nameFor($product), $fullPath);
         }
 
-        return self::PUBLIC_SUBDIR . '/' . $filename;
+        return self::PUBLIC_SUBDIR . '/' . basename($fullPath);
+    }
+
+    /** Deletes the cached placeholder for this product, if one exists. */
+    public static function forget(array $product): void
+    {
+        $fullPath = self::fullPathFor($product);
+        if (is_file($fullPath)) {
+            unlink($fullPath);
+        }
+    }
+
+    private static function nameFor(array $product): string
+    {
+        return trim((string) ($product['name'] ?? '')) ?: 'Product';
+    }
+
+    /**
+     * The cache filename is derived from the product's current name, so a
+     * rename naturally invalidates it — the next pathFor() call redraws a
+     * fresh image instead of showing stale text.
+     */
+    private static function fullPathFor(array $product): string
+    {
+        $name = self::nameFor($product);
+        $id = (int) ($product['id'] ?? 0);
+        $filename = $id . '-' . substr(md5($name), 0, 8) . '.jpg';
+        $dir = __DIR__ . '/../../public/' . self::PUBLIC_SUBDIR;
+
+        return $dir . '/' . $filename;
     }
 
     private static function render(string $name, string $destinationPath): void
