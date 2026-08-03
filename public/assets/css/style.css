@@ -308,6 +308,20 @@ form input:focus, form select:focus {
 
 /* Footer */
 .site-footer { border-top: 1px solid var(--color-border); padding: 24px 0; color: var(--color-muted); font-size: 0.85rem; }
+.footer-inner { display: flex; flex-direction: column; gap: 14px; }
+.footer-nav { display: flex; flex-wrap: wrap; gap: 20px; }
+.footer-nav a { color: var(--color-muted); font-size: 0.85rem; transition: color 0.15s ease; }
+.footer-nav a:hover { color: var(--color-accent); }
+
+/* Static content pages: about / info / support / terms */
+.content-page { max-width: 720px; }
+.content-page .page-subtitle { color: var(--color-muted); margin: 8px 0 0; }
+.content-page h2 { margin: 32px 0 10px; font-size: 1.15rem; }
+.content-page p { margin: 0 0 14px; }
+.content-page ul { margin: 0 0 14px; padding-left: 20px; }
+.content-page li { margin-bottom: 6px; }
+.content-page a { color: var(--color-accent); text-decoration: underline; text-decoration-color: var(--color-border-strong); }
+.content-page .updated-note { color: var(--color-muted); font-size: 0.82rem; margin-top: 40px; border-top: 1px solid var(--color-border); padding-top: 16px; }
 
 /* Admin */
 .admin-tag {
