@@ -5,7 +5,9 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use Store\Models\Supplier;
 use Store\Services\AdminAuth;
+use Store\Services\Csrf;
 use Store\Services\ProductImporter;
+use Store\Services\UrlGuard;
 
 AdminAuth::requireAuth();
 
@@ -13,17 +15,23 @@ $message = null;
 $importSummary = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    Csrf::requireValid();
     $action = (string) ($_POST['action'] ?? '');
 
     if ($action === 'create') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $url = trim((string) ($_POST['list_products_url'] ?? ''));
 
-        if ($name !== '' && filter_var($url, FILTER_VALIDATE_URL)) {
-            Supplier::create($name, $url);
-            $message = "Supplier \"{$name}\" added.";
-        } else {
+        if ($name === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
             $message = 'Please provide a name and a valid URL.';
+        } else {
+            try {
+                UrlGuard::resolvePublicHttpUrl($url);
+                Supplier::create($name, $url);
+                $message = "Supplier \"{$name}\" added.";
+            } catch (InvalidArgumentException $e) {
+                $message = $e->getMessage();
+            }
         }
     } elseif ($action === 'delete') {
         Supplier::delete((int) ($_POST['id'] ?? 0));
@@ -74,6 +82,7 @@ require __DIR__ . '/partials/header.php';
 <div class="panel">
     <h2>Add supplier</h2>
     <form method="post">
+        <?= Csrf::field() ?>
         <label>Name <input type="text" name="name" required></label>
         <label>Product list URL <input type="url" name="list_products_url" placeholder="https://supplier.example.com/products.json" required></label>
         <input type="hidden" name="action" value="create">
@@ -91,6 +100,7 @@ require __DIR__ . '/partials/header.php';
                 <td><?= htmlspecialchars($sup['list_products_url']) ?></td>
                 <td>
                     <form method="post" class="inline-form">
+                        <?= Csrf::field() ?>
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="id" value="<?= (int) $sup['id'] ?>">
                         <button type="submit" class="btn-danger">Delete</button>
@@ -102,6 +112,7 @@ require __DIR__ . '/partials/header.php';
 </table>
 
 <form method="post" style="margin-top: 20px;">
+    <?= Csrf::field() ?>
     <input type="hidden" name="action" value="run_import">
     <button type="submit" class="btn-primary">Run import now</button>
 </form>

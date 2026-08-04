@@ -7,7 +7,7 @@ use Store\Services\CartService;
 
 $cart = new CartService();
 $items = $cart->getItems();
-$total = $cart->getTotal();
+$total = $cart->getTotal($items);
 
 $pageTitle = 'Your Cart';
 require __DIR__ . '/partials/header.php';

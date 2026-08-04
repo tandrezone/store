@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Store\Config;
 
 use PDO;
+use RuntimeException;
 
 class Database
 {
@@ -19,8 +20,12 @@ class Database
         $host = getenv('DB_HOST') ?: '127.0.0.1';
         $port = getenv('DB_PORT') ?: '3306';
         $name = getenv('DB_NAME') ?: 'online_store';
-        $user = getenv('DB_USER') ?: 'store_user';
-        $pass = getenv('DB_PASS') ?: 'a_strong_password';
+        $user = getenv('DB_USER');
+        $pass = getenv('DB_PASS');
+
+        if ($user === false || $pass === false) {
+            throw new RuntimeException('DB_USER / DB_PASS are not set.');
+        }
 
         $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
 

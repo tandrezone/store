@@ -17,7 +17,11 @@ class DefaultProductImage
 
     /**
      * Returns the image_path (relative to /public) for the given product,
-     * generating and caching the file on first use.
+     * generating and caching the file on first use. Only call this for a
+     * single product per request (e.g. the product detail page) — for a
+     * listing of many products use cachedPathFor() instead, since
+     * generating on the spot for every miss would make the listing page's
+     * response time scale with how many products still need a placeholder.
      */
     public static function pathFor(array $product): string
     {
@@ -32,6 +36,19 @@ class DefaultProductImage
         }
 
         return self::PUBLIC_SUBDIR . '/' . basename($fullPath);
+    }
+
+    /**
+     * Non-generating lookup for listing pages: returns the cached
+     * placeholder path if it already exists on disk, or '' if it still
+     * needs to be (re)generated — run commands/regenerate-images.php to
+     * fill those in ahead of time rather than on a live request.
+     */
+    public static function cachedPathFor(array $product): string
+    {
+        $fullPath = self::fullPathFor($product);
+
+        return is_file($fullPath) ? self::PUBLIC_SUBDIR . '/' . basename($fullPath) : '';
     }
 
     /** Deletes the cached placeholder for this product, if one exists. */
@@ -80,8 +97,13 @@ class DefaultProductImage
 
         self::drawCenteredText($image, $name, $width, $height);
 
-        imagejpeg($image, $destinationPath, 90);
+        // Render to a temp file and rename into place — rename() is atomic,
+        // so a concurrent request that hits the same cache miss will either
+        // see no file yet or the finished one, never a half-written JPEG.
+        $tmpPath = $destinationPath . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        imagejpeg($image, $tmpPath, 90);
         imagedestroy($image);
+        rename($tmpPath, $destinationPath);
     }
 
     private static function drawCenteredText($image, string $text, int $width, int $height): void

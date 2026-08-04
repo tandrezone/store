@@ -10,6 +10,7 @@ use Store\Models\Product;
 use Store\Models\Supplier;
 use Store\Models\Variant;
 use Store\Services\AdminAuth;
+use Store\Services\Csrf;
 use Store\Services\ProductUpdater;
 
 AdminAuth::requireAuth();
@@ -23,6 +24,7 @@ $expandedId = (int) ($_GET['edit'] ?? 0);
 $updateSummary = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    Csrf::requireValid();
     $action = (string) ($_POST['action'] ?? '');
     $id = (int) ($_POST['id'] ?? 0);
 
@@ -122,10 +124,7 @@ $products = $pdo->query("
     ORDER BY p.created_at DESC
 ")->fetchAll();
 
-$variantsByProduct = [];
-foreach ($products as $p) {
-    $variantsByProduct[(int) $p['id']] = Variant::forProduct((int) $p['id']);
-}
+$variantsByProduct = Variant::forProducts(array_map('intval', array_column($products, 'id')));
 
 $pageTitle = 'Admin — Products';
 $activeNav = 'products';
@@ -157,6 +156,7 @@ require __DIR__ . '/partials/header.php';
 <?php endif; ?>
 
 <form method="post" style="margin-bottom: 20px;">
+    <?= Csrf::field() ?>
     <input type="hidden" name="action" value="run_update">
     <button type="submit" class="btn-primary">✨ Run AI update on imported products</button>
     <p class="field-hint">
@@ -168,6 +168,7 @@ require __DIR__ . '/partials/header.php';
 <details class="panel" <?= $expandedId === 0 && $message === null ? '' : '' ?>>
     <summary class="panel-summary">Add product</summary>
     <form method="post">
+        <?= Csrf::field() ?>
         <input type="hidden" name="action" value="create">
 
         <label>Category
@@ -242,6 +243,7 @@ require __DIR__ . '/partials/header.php';
                 </td>
                 <td>
                     <form method="post" class="inline-form">
+                        <?= Csrf::field() ?>
                         <input type="hidden" name="action" value="set_status">
                         <input type="hidden" name="id" value="<?= $pid ?>">
                         <select name="status" class="status-select" data-status="<?= htmlspecialchars($p['import_status']) ?>"
@@ -261,6 +263,7 @@ require __DIR__ . '/partials/header.php';
                                 title="Magic edit with AI">✨</button>
                         <form method="post" class="inline-form"
                               onsubmit="return confirm('Delete &quot;<?= htmlspecialchars(addslashes($p['name'])) ?>&quot;? This cannot be undone.');">
+                            <?= Csrf::field() ?>
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="id" value="<?= $pid ?>">
                             <button type="submit" class="icon-btn icon-btn-danger" title="Delete product">🗑</button>
@@ -273,6 +276,7 @@ require __DIR__ . '/partials/header.php';
                 <td colspan="7">
                     <div class="edit-block">
                         <form method="post" class="edit-form">
+                            <?= Csrf::field() ?>
                             <input type="hidden" name="action" value="update">
                             <input type="hidden" name="id" value="<?= $pid ?>">
 

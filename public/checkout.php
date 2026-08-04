@@ -154,7 +154,7 @@ require __DIR__ . '/partials/header.php';
                     </li>
                 <?php endforeach; ?>
             </ul>
-            <p class="order-total">Total: <?= number_format($cart->getTotal(), 2) ?>€</p>
+            <p class="order-total">Total: <?= number_format($cart->getTotal($items), 2) ?>€</p>
             <p class="payment-note">You'll be redirected to OxaPay to complete payment.</p>
         </aside>
     </div>

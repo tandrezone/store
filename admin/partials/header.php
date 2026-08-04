@@ -1,11 +1,14 @@
 <?php
 /** Expects $pageTitle and optionally $activeNav ('products'|'suppliers'|'orders') to be set by the including page. */
+
+use Store\Services\Csrf;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="<?= htmlspecialchars(Csrf::token()) ?>">
 <title><?= htmlspecialchars($pageTitle ?? 'Admin') ?></title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg">

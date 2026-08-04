@@ -14,6 +14,7 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Store\Models\Product;
 use Store\Services\AdminAuth;
+use Store\Services\Csrf;
 use Store\Services\GeminiClient;
 
 header('Content-Type: application/json');
@@ -21,6 +22,12 @@ header('Content-Type: application/json');
 if (!AdminAuth::check()) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Not authenticated.']);
+    exit;
+}
+
+if (!Csrf::check($_POST['csrf_token'] ?? null)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Invalid or expired session, please reload the page.']);
     exit;
 }
 

@@ -28,7 +28,7 @@ class GeminiClient
             throw new RuntimeException('GEMINI_API_KEY is not set.');
         }
 
-        $url = GeminiConfig::baseUrl() . '/models/' . GeminiConfig::model() . ':generateContent?key=' . urlencode($apiKey);
+        $url = GeminiConfig::baseUrl() . '/models/' . GeminiConfig::model() . ':generateContent';
 
         $payload = [
             'contents' => [
@@ -44,7 +44,10 @@ class GeminiClient
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST           => true,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $apiKey,
+            ],
             CURLOPT_POSTFIELDS     => json_encode($payload),
             CURLOPT_TIMEOUT        => 30,
         ]);

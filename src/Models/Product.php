@@ -40,7 +40,7 @@ class Product
 
         $products = $stmt->fetchAll();
         foreach ($products as &$product) {
-            $product['image_path'] = self::resolveImagePath($product);
+            $product['image_path'] = self::resolveImagePathCached($product);
         }
 
         return $products;
@@ -125,6 +125,7 @@ class Product
      * Falls back to a generated placeholder image when image_path is empty
      * or points to a file that doesn't actually exist on disk.
      */
+    /** Generates the placeholder on first use — fine for a single product page. */
     private static function resolveImagePath(array $product): string
     {
         $path = (string) ($product['image_path'] ?? '');
@@ -134,6 +135,22 @@ class Product
         }
 
         return DefaultProductImage::pathFor($product);
+    }
+
+    /**
+     * Never generates — used for listing pages so a page with many products
+     * missing a placeholder doesn't pay for generating all of them inline.
+     * Run commands/regenerate-images.php to keep the cache warm.
+     */
+    private static function resolveImagePathCached(array $product): string
+    {
+        $path = (string) ($product['image_path'] ?? '');
+
+        if ($path !== '' && is_file(__DIR__ . '/../../public/' . $path)) {
+            return $path;
+        }
+
+        return DefaultProductImage::cachedPathFor($product);
     }
 
     public static function variantsForProduct(int $productId): array

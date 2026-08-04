@@ -96,10 +96,11 @@ class CartService
         return $stmt->fetchAll();
     }
 
-    public function getTotal(): float
+    /** Pass the result of a prior getItems() call to avoid re-querying it. */
+    public function getTotal(?array $items = null): float
     {
         $total = 0.0;
-        foreach ($this->getItems() as $item) {
+        foreach ($items ?? $this->getItems() as $item) {
             $total += (float) $item['price'] * (int) $item['quantity'];
         }
         return round($total, 2);

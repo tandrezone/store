@@ -42,12 +42,14 @@
             output.textContent = 'Thinking…';
 
             try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
                 const response = await fetch('/admin/api/magic-edit.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: new URLSearchParams({
                         product_id: block.dataset.productId,
                         instruction,
+                        csrf_token: csrfToken,
                     }),
                 });
                 const data = await response.json();

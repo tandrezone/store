@@ -83,18 +83,27 @@ class ProductImporter
     /**
      * Fetches and decodes the feed, returning the flat list of product items
      * regardless of whether the feed wraps them in a "products" key or not.
+     *
+     * The hostname is resolved and validated once here, then curl is pinned
+     * to that exact IP (CURLOPT_RESOLVE) so a DNS change between validation
+     * and the request can't redirect the fetch to an internal address
+     * (SSRF / DNS-rebinding). Redirects are not followed for the same reason
+     * — point list_products_url at the final URL if the feed ever redirects.
      */
     private static function fetchItems(string $url): array
     {
+        $target = UrlGuard::resolvePublicHttpUrl($url);
+
         $ch = curl_init($url);
 
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 15,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_RESOLVE        => ["{$target['host']}:{$target['port']}:{$target['ip']}"],
         ]);
 
         $raw = curl_exec($ch);

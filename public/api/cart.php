@@ -67,7 +67,7 @@ try {
         'success' => true,
         'items'   => $items,
         'count'   => $count,
-        'total'   => $cart->getTotal(),
+        'total'   => $cart->getTotal($items),
     ]);
 } catch (InvalidArgumentException $e) {
     http_response_code(400);

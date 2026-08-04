@@ -5,6 +5,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use Store\Models\Order;
 use Store\Services\AdminAuth;
+use Store\Services\Csrf;
 
 AdminAuth::requireAuth();
 
@@ -12,6 +13,7 @@ $id = (int) ($_GET['id'] ?? 0);
 $message = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'set_status') {
+    Csrf::requireValid();
     $postedId = (int) ($_POST['id'] ?? 0);
     if ($postedId === $id && Order::updateStatus($id, (string) ($_POST['status'] ?? ''))) {
         $message = 'Status updated.';
@@ -81,6 +83,7 @@ require __DIR__ . '/partials/header.php';
             <div class="panel">
                 <h2>Update status</h2>
                 <form method="post">
+                    <?= Csrf::field() ?>
                     <input type="hidden" name="action" value="set_status">
                     <input type="hidden" name="id" value="<?= (int) $order['id'] ?>">
                     <select name="status" class="status-select" style="width: 100%; margin-bottom: 12px;">

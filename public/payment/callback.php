@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Store\Config\Database;
+use Store\Config\OxaPayConfig;
 use Store\Models\Order;
 use Store\Models\Variant;
 
@@ -12,12 +13,24 @@ use Store\Models\Variant;
  * ("paying" then "paid", or "failed"/"expired").
  * Must respond HTTP 200 with body "ok" or OxaPay will retry.
  *
- * IMPORTANT: before going live, verify the current signature/HMAC
- * validation scheme in OxaPay's docs and check it here before trusting
- * the payload — this stub only reads the body.
+ * Every callback carries an HMAC-SHA512 signature of the raw body in the
+ * "HMAC" header, keyed with the merchant API key. Reject anything that
+ * doesn't match — without this check anyone who can guess an order number
+ * could POST a fake "paid" status and get an unpaid order fulfilled.
+ * https://docs.oxapay.com/webhook
  */
 
 $raw = file_get_contents('php://input');
+
+$secret = (string) OxaPayConfig::get()['merchant_api_key'];
+$signature = $_SERVER['HTTP_HMAC'] ?? '';
+
+if ($secret === '' || $signature === '' || !hash_equals(hash_hmac('sha512', $raw, $secret), $signature)) {
+    http_response_code(401);
+    echo 'invalid signature';
+    exit;
+}
+
 $data = json_decode($raw, true);
 
 if (!is_array($data) || empty($data['order_id']) || empty($data['status'])) {

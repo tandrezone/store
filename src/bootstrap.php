@@ -34,3 +34,23 @@ if (is_file($envFile)) {
         }
     }
 }
+
+/**
+ * Harden session cookies for every session_start() call in the app —
+ * this file loads (via composer's autoload "files") before any of them run.
+ * Secure is conditional on the request actually being HTTPS so local HTTP
+ * dev setups still work.
+ */
+$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+if (PHP_SAPI !== 'cli') {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => $isHttps,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
