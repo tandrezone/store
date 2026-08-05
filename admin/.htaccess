@@ -1,0 +1,20 @@
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# partials/ contains header/footer includes, not standalone pages.
+<IfModule mod_authz_core.c>
+    <FilesMatch "^(header|footer)\.php$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "^(header|footer)\.php$">
+        Order deny,allow
+        Deny from all
+    </FilesMatch>
+</IfModule>
