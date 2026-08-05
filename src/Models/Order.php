@@ -13,6 +13,12 @@ class Order
 {
     public const STATUSES = ['pending', 'paid', 'processing', 'shipped', 'completed', 'cancelled'];
 
+    /** key => [label, cost]. Shown as radio options on checkout. */
+    public const SHIPPING_METHODS = [
+        'standard' => ['label' => 'Standard Shipping (5-7 business days)', 'cost' => 0.00],
+        'express'  => ['label' => 'Express Shipping (1-2 business days)', 'cost' => 9.99],
+    ];
+
     /**
      * Admin listing, optionally filtered by status, newest first.
      */
@@ -68,9 +74,14 @@ class Order
      * Creates an order + its line items from the current cart contents.
      * $shipping keys: name, address1, address2, city, state, postal_code, country, email, phone
      * $items: array of cart items as returned by CartService::getItems()
+     * $shippingMethod: a key from SHIPPING_METHODS
      */
-    public static function create(array $shipping, array $items): array
+    public static function create(array $shipping, array $items, string $shippingMethod): array
     {
+        if (!isset(self::SHIPPING_METHODS[$shippingMethod])) {
+            throw new RuntimeException('Please choose a shipping method.');
+        }
+
         $pdo = Database::connection();
         $pdo->beginTransaction();
 
@@ -98,31 +109,36 @@ class Order
                 $subtotal += (float) $item['price'] * (int) $item['quantity'];
             }
             $subtotal = round($subtotal, 2);
-            $total = $subtotal; // extend here for shipping cost / taxes if needed
+            $shippingCost = self::SHIPPING_METHODS[$shippingMethod]['cost'];
+            $total = round($subtotal + $shippingCost, 2);
 
             $orderNumber = self::generateOrderNumber();
 
             $stmt = $pdo->prepare("
                 INSERT INTO orders
                     (order_number, email, phone, ship_name, ship_address1, ship_address2,
-                     ship_city, ship_state, ship_postal_code, ship_country, subtotal, total)
+                     ship_city, ship_state, ship_postal_code, ship_country, shipping_method,
+                     subtotal, shipping_cost, total)
                 VALUES
                     (:order_number, :email, :phone, :ship_name, :address1, :address2,
-                     :city, :state, :postal_code, :country, :subtotal, :total)
+                     :city, :state, :postal_code, :country, :shipping_method,
+                     :subtotal, :shipping_cost, :total)
             ");
             $stmt->execute([
-                'order_number' => $orderNumber,
-                'email'        => $shipping['email'],
-                'phone'        => $shipping['phone'] ?: null,
-                'ship_name'    => $shipping['name'],
-                'address1'     => $shipping['address1'],
-                'address2'     => $shipping['address2'] ?: null,
-                'city'         => $shipping['city'],
-                'state'        => $shipping['state'] ?: null,
-                'postal_code'  => $shipping['postal_code'],
-                'country'      => $shipping['country'],
-                'subtotal'     => $subtotal,
-                'total'        => $total,
+                'order_number'    => $orderNumber,
+                'email'           => $shipping['email'],
+                'phone'           => $shipping['phone'] ?: null,
+                'ship_name'       => $shipping['name'],
+                'address1'        => $shipping['address1'],
+                'address2'        => $shipping['address2'] ?: null,
+                'city'            => $shipping['city'],
+                'state'           => $shipping['state'] ?: null,
+                'postal_code'     => $shipping['postal_code'],
+                'country'         => $shipping['country'],
+                'shipping_method' => $shippingMethod,
+                'subtotal'        => $subtotal,
+                'shipping_cost'   => $shippingCost,
+                'total'           => $total,
             ]);
 
             $orderId = (int) $pdo->lastInsertId();

@@ -57,6 +57,10 @@ require __DIR__ . '/partials/header.php';
                 <span>Subtotal</span>
                 <span><?= number_format((float) $order['subtotal'], 2) ?>€</span>
             </p>
+            <p style="display: flex; justify-content: space-between;">
+                <span>Shipping (<?= htmlspecialchars(Order::SHIPPING_METHODS[$order['shipping_method']]['label'] ?? $order['shipping_method']) ?>)</span>
+                <span><?= number_format((float) $order['shipping_cost'], 2) ?>€</span>
+            </p>
             <p style="display: flex; justify-content: space-between;" class="order-total">
                 <span>Total</span>
                 <span><?= number_format((float) $order['total'], 2) ?>€</span>

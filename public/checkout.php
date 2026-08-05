@@ -39,16 +39,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'country'     => trim((string) ($_POST['country'] ?? '')),
     ];
 
+    $shippingMethod = (string) ($_POST['shipping_method'] ?? '');
+
     if ($shipping['name'] === '') $errors[] = 'Full name is required.';
     if (!filter_var($shipping['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'A valid email is required.';
     if ($shipping['address1'] === '') $errors[] = 'Address is required.';
     if ($shipping['city'] === '') $errors[] = 'City is required.';
     if ($shipping['postal_code'] === '') $errors[] = 'Postal code is required.';
     if ($shipping['country'] === '') $errors[] = 'Country is required.';
+    if (!isset(Order::SHIPPING_METHODS[$shippingMethod])) $errors[] = 'Please choose a shipping method.';
 
     if (empty($errors)) {
         try {
-            $order = Order::create($shipping, $items);
+            $order = Order::create($shipping, $items, $shippingMethod);
         } catch (Throwable $e) {
             $errors[] = $e->getMessage();
         }
@@ -138,6 +141,22 @@ require __DIR__ . '/partials/header.php';
                 </div>
             </div>
 
+            <h2>Shipping method</h2>
+            <?php $selectedMethod = $_POST['shipping_method'] ?? 'standard'; ?>
+            <div class="shipping-methods">
+                <?php foreach (Order::SHIPPING_METHODS as $key => $method): ?>
+                    <label class="shipping-method-option">
+                        <input type="radio" name="shipping_method" value="<?= htmlspecialchars($key) ?>"
+                               data-cost="<?= htmlspecialchars((string) $method['cost']) ?>"
+                               <?= $selectedMethod === $key ? 'checked' : '' ?> required>
+                        <span><?= htmlspecialchars($method['label']) ?></span>
+                        <span class="shipping-method-cost">
+                            <?= $method['cost'] > 0 ? number_format($method['cost'], 2) . '€' : 'Free' ?>
+                        </span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+
             <button type="submit" class="btn-primary">Continue to payment</button>
         </form>
 
@@ -154,10 +173,28 @@ require __DIR__ . '/partials/header.php';
                     </li>
                 <?php endforeach; ?>
             </ul>
-            <p class="order-total">Total: <?= number_format($cart->getTotal($items), 2) ?>€</p>
+            <p class="order-subtotal"><span>Subtotal</span><span><?= number_format($cart->getTotal($items), 2) ?>€</span></p>
+            <p class="order-shipping"><span>Shipping</span><span id="checkout-shipping-cost"><?= number_format((float) (Order::SHIPPING_METHODS[$selectedMethod]['cost'] ?? 0), 2) ?>€</span></p>
+            <p class="order-total"><span>Total</span><span id="checkout-total"><?= number_format($cart->getTotal($items) + (float) (Order::SHIPPING_METHODS[$selectedMethod]['cost'] ?? 0), 2) ?>€</span></p>
             <p class="payment-note">You'll be redirected to OxaPay to complete payment.</p>
         </aside>
     </div>
 </section>
+
+<script>
+(function () {
+    var subtotal = <?= json_encode($cart->getTotal($items)) ?>;
+    var shippingEl = document.getElementById('checkout-shipping-cost');
+    var totalEl = document.getElementById('checkout-total');
+
+    document.querySelectorAll('input[name="shipping_method"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            var cost = parseFloat(radio.dataset.cost) || 0;
+            shippingEl.textContent = cost.toFixed(2) + '€';
+            totalEl.textContent = (subtotal + cost).toFixed(2) + '€';
+        });
+    });
+})();
+</script>
 
 <?php require __DIR__ . '/partials/footer.php'; ?>
