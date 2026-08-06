@@ -160,6 +160,10 @@ class ProductImporter
             $normalized[] = self::normalizeItem($item);
         }
 
+        if (empty($normalized)) {
+            throw new RuntimeException('Feed product list items had an invalid structure: ' . $url);
+        }
+
         return $normalized;
     }
 
@@ -464,7 +468,7 @@ class ProductImporter
             }
 
             $normalized[] = [
-                'sku' => self::firstString($variant, ['sku', 'id', 'code']),
+                'sku' => self::firstString($variant, ['sku', 'code']),
                 'label' => self::firstString($variant, ['label', 'size', 'pack', 'pack_size', 'packSize']),
                 'unit' => self::firstString($variant, ['unit', 'unit_type', 'unitType']),
                 'price' => $variant['price'] ?? $variant['cost'] ?? 0,
