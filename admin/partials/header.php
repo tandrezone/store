@@ -25,6 +25,7 @@ use Store\Services\Csrf;
             <a href="/admin/products.php" class="<?= ($activeNav ?? '') === 'products' ? 'active' : '' ?>">Products</a>
             <a href="/admin/suppliers.php" class="<?= ($activeNav ?? '') === 'suppliers' ? 'active' : '' ?>">Suppliers</a>
             <a href="/admin/orders.php" class="<?= ($activeNav ?? '') === 'orders' ? 'active' : '' ?>">Orders</a>
+            <a href="/admin/todos.php" class="<?= ($activeNav ?? '') === 'todos' ? 'active' : '' ?>">Todo</a>
             <a href="/admin/logout.php">Log out</a>
         </nav>
     </div>

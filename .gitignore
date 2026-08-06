@@ -4,3 +4,5 @@ public/assets/images/generated/
 !.env.example
 vendor/*
 public/admin/*
+vendor/composer/*
+vendor/composer/autoload_static.php

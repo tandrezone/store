@@ -182,9 +182,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$statusFilter = trim((string) ($_GET['status'] ?? ''));
+if (!in_array($statusFilter, IMPORT_STATUSES, true)) {
+    $statusFilter = '';
+}
+
 $categories = Category::all();
 $suppliers = Supplier::all();
-$products = $pdo->query("
+$productsSql = "
     SELECT p.id, p.name, p.category_id, p.supplier_id, p.short_description, p.long_description,
            p.image_path, p.images,
            c.name AS category_name, s.name AS supplier_name,
@@ -193,9 +198,17 @@ $products = $pdo->query("
     JOIN categories c ON c.id = p.category_id
     LEFT JOIN suppliers s ON s.id = p.supplier_id
     LEFT JOIN product_variants v ON v.product_id = p.id
-    GROUP BY p.id
-    ORDER BY p.created_at DESC
-")->fetchAll();
+";
+$productsParams = [];
+if ($statusFilter !== '') {
+    $productsSql .= ' WHERE p.import_status = :status';
+    $productsParams['status'] = $statusFilter;
+}
+$productsSql .= ' GROUP BY p.id ORDER BY p.created_at DESC';
+
+$productsStmt = $pdo->prepare($productsSql);
+$productsStmt->execute($productsParams);
+$products = $productsStmt->fetchAll();
 
 $variantsByProduct = Variant::forProducts(array_map('intval', array_column($products, 'id')));
 
@@ -284,6 +297,17 @@ require __DIR__ . '/partials/header.php';
 </details>
 
 <h2>Existing products</h2>
+
+<div class="filters">
+    <a href="/admin/products.php" class="filter-pill <?= $statusFilter === '' ? 'active' : '' ?>">All</a>
+    <?php foreach (IMPORT_STATUSES as $status): ?>
+        <a href="/admin/products.php?status=<?= htmlspecialchars($status) ?>"
+           class="filter-pill <?= $statusFilter === $status ? 'active' : '' ?>">
+            <?= htmlspecialchars(ucfirst($status)) ?>
+        </a>
+    <?php endforeach; ?>
+</div>
+
 <table class="cart-table admin-table">
     <thead>
         <tr>
