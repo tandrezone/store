@@ -440,6 +440,7 @@ require __DIR__ . '/partials/header.php';
         <tr>
             <th><input type="checkbox" id="select-all-products" title="Select all"></th>
             <th></th>
+            <th></th>
             <th><?= sort_link('name', 'Name', $sort, $dir, $statusFilter) ?></th>
             <th><?= sort_link('category', 'Category', $sort, $dir, $statusFilter) ?></th>
             <th><?= sort_link('supplier', 'Supplier', $sort, $dir, $statusFilter) ?></th>
@@ -460,6 +461,13 @@ require __DIR__ . '/partials/header.php';
                             aria-expanded="<?= $isOpen ? 'true' : 'false' ?>" title="Expand to edit">
                         <span class="chevron">›</span>
                     </button>
+                </td>
+                <td>
+                    <?php if (!empty($p['image_path'])): ?>
+                        <img src="/<?= htmlspecialchars($p['image_path']) ?>" alt="" class="product-thumb">
+                    <?php else: ?>
+                        <div class="product-thumb product-thumb-empty">—</div>
+                    <?php endif; ?>
                 </td>
                 <td><?= htmlspecialchars($p['name']) ?></td>
                 <td><?= htmlspecialchars($p['category_name']) ?></td>
@@ -502,7 +510,7 @@ require __DIR__ . '/partials/header.php';
             </tr>
 
             <tr class="edit-row" id="edit-<?= $pid ?>" <?= $isOpen ? '' : 'hidden' ?>>
-                <td colspan="8">
+                <td colspan="9">
                     <div class="edit-block">
                         <div class="images-panel">
                             <h3>Images</h3>
@@ -631,7 +639,7 @@ require __DIR__ . '/partials/header.php';
             </tr>
 
             <tr class="magic-row" id="magic-<?= $pid ?>" hidden>
-                <td colspan="8">
+                <td colspan="9">
                     <div class="magic-block" data-product-id="<?= $pid ?>">
                         <h3>✨ Magic edit</h3>
                         <p class="field-hint">

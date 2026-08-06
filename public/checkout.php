@@ -5,6 +5,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use Store\Config\OxaPayConfig;
 use Store\Models\Order;
+use Store\Models\PageView;
 use Store\Services\CartService;
 use Store\Services\OxaPayClient;
 
@@ -19,6 +20,10 @@ $errors = [];
 if (empty($items)) {
     header('Location: /cart.php');
     exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    PageView::record('checkout_shipping', null, '/checkout.php');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -69,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!empty($invoice['data']['payment_url'])) {
                 $cart->clear();
+                PageView::record('checkout_payment', null, '/checkout.php');
                 header('Location: ' . $invoice['data']['payment_url']);
                 exit;
             }

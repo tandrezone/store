@@ -1,5 +1,9 @@
 <?php
 /** Expects $pageTitle to be set by the including page. */
+
+use Store\Models\PageView;
+
+PageView::record('visit', null, parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
 ?>
 <!DOCTYPE html>
 <html lang="en">

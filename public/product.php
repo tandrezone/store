@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use Store\Models\PageView;
 use Store\Models\Product;
 use Store\Services\HtmlSanitizer;
 
@@ -17,6 +18,8 @@ if (!$product) {
     require __DIR__ . '/partials/footer.php';
     exit;
 }
+
+PageView::record('product_view', (int) $product['id'], '/product.php');
 
 $pageTitle = $product['name'];
 require __DIR__ . '/partials/header.php';

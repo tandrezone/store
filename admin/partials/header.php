@@ -1,5 +1,5 @@
 <?php
-/** Expects $pageTitle and optionally $activeNav ('products'|'suppliers'|'orders') to be set by the including page. */
+/** Expects $pageTitle and optionally $activeNav ('products'|'categories'|'suppliers'|'orders'|'analytics'|'todos') to be set by the including page. */
 
 use Store\Services\Csrf;
 ?>
@@ -23,8 +23,10 @@ use Store\Services\Csrf;
         <a href="/admin/products.php" class="logo">ChemHeaven <span class="admin-tag">Admin</span></a>
         <nav class="main-nav">
             <a href="/admin/products.php" class="<?= ($activeNav ?? '') === 'products' ? 'active' : '' ?>">Products</a>
+            <a href="/admin/categories.php" class="<?= ($activeNav ?? '') === 'categories' ? 'active' : '' ?>">Categories</a>
             <a href="/admin/suppliers.php" class="<?= ($activeNav ?? '') === 'suppliers' ? 'active' : '' ?>">Suppliers</a>
             <a href="/admin/orders.php" class="<?= ($activeNav ?? '') === 'orders' ? 'active' : '' ?>">Orders</a>
+            <a href="/admin/analytics.php" class="<?= ($activeNav ?? '') === 'analytics' ? 'active' : '' ?>">Analytics</a>
             <a href="/admin/todos.php" class="<?= ($activeNav ?? '') === 'todos' ? 'active' : '' ?>">Todo</a>
             <a href="/admin/logout.php">Log out</a>
         </nav>
