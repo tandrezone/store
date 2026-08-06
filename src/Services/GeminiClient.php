@@ -138,4 +138,86 @@ class GeminiClient
 
         throw new RuntimeException('Gemini reply did not contain an edited image.');
     }
+
+    /**
+     * Best-effort web image search via Gemini's Google Search grounding —
+     * no separate search-API key needed, reuses GEMINI_API_KEY. Grounding
+     * returns cited web *pages*, not guaranteed direct image links, so this
+     * just extracts the first URL (from the model's own reply, then from
+     * its grounding citations) that looks like a direct image file. Callers
+     * must still verify the URL actually resolves to a real image (e.g. via
+     * ImageDownloader) before trusting it — this only returns a candidate.
+     * Returns null if no image-looking URL could be extracted at all.
+     */
+    public function findImageUrl(string $query): ?string
+    {
+        $apiKey = GeminiConfig::apiKey();
+        if ($apiKey === '') {
+            throw new RuntimeException('GEMINI_API_KEY is not set.');
+        }
+
+        $url = GeminiConfig::baseUrl() . '/models/' . GeminiConfig::model() . ':generateContent';
+
+        $prompt = <<<PROMPT
+            Search the web and find one direct URL to a real, freely viewable
+            product photo for: {$query}
+            Reply with ONLY that single URL, no other text and no markdown.
+            The URL should end in a common image extension (.jpg, .jpeg,
+            .png, or .webp).
+            PROMPT;
+
+        $payload = [
+            'contents' => [['parts' => [['text' => $prompt]]]],
+            'tools'    => [['google_search' => (object) []]],
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $apiKey,
+            ],
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_TIMEOUT        => 30,
+        ]);
+
+        $response = curl_exec($ch);
+        $error = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            throw new RuntimeException('Gemini search request failed: ' . $error);
+        }
+
+        $decoded = json_decode($response, true);
+        if ($httpCode >= 400 || !is_array($decoded)) {
+            throw new RuntimeException('Gemini returned an unexpected response (HTTP ' . $httpCode . '): ' . $response);
+        }
+
+        $candidates = [];
+
+        $text = trim((string) ($decoded['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+        if ($text !== '') {
+            $candidates[] = $text;
+        }
+
+        $chunks = $decoded['candidates'][0]['groundingMetadata']['groundingChunks'] ?? [];
+        foreach ($chunks as $chunk) {
+            $uri = $chunk['web']['uri'] ?? null;
+            if (is_string($uri) && $uri !== '') {
+                $candidates[] = $uri;
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if (preg_match('/https?:\/\/\S+\.(?:jpe?g|png|webp)(?:\?\S*)?/i', $candidate, $matches)) {
+                return $matches[0];
+            }
+        }
+
+        return null;
+    }
 }

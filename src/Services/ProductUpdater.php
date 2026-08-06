@@ -171,9 +171,11 @@ class ProductUpdater
     /**
      * Sends the image at $relativePath (relative to /public) to Gemini and
      * overwrites it with the edited result. Throws on any failure — the
-     * caller treats that as "leave this one image alone".
+     * caller treats that as "leave this one image alone". Public so
+     * commands/check_image.php can run this same edit against a single
+     * product on demand, outside the bulk 'imported'-only run above.
      */
-    private static function removeTextFromImage(string $relativePath): void
+    public static function removeTextFromImage(string $relativePath): void
     {
         $fullPath = __DIR__ . '/../../public/' . $relativePath;
         if (!is_file($fullPath)) {

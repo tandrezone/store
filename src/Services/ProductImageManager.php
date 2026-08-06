@@ -122,6 +122,26 @@ class ProductImageManager
         self::save($pdo, $productId, $reordered);
     }
 
+    /**
+     * Attaches a file that's already on disk under the products directory
+     * (e.g. saved by ImageDownloader) to $productId's image list, without
+     * going through the $_FILES upload flow addUpload() expects. Used by
+     * commands/check_image.php once a downloaded web-search candidate has
+     * been reviewed. No-ops if the file isn't actually present.
+     */
+    public static function attachExisting(int $productId, string $relativePath, bool $asMain = true): void
+    {
+        if (!is_file(self::localDir() . '/' . basename($relativePath))) {
+            return;
+        }
+
+        $pdo = Database::connection();
+        $paths = self::currentPaths($pdo, $productId);
+        $merged = $asMain ? array_merge([$relativePath], $paths) : array_merge($paths, [$relativePath]);
+
+        self::save($pdo, $productId, array_values(array_unique($merged)));
+    }
+
     private static function currentPaths(PDO $pdo, int $productId): array
     {
         $stmt = $pdo->prepare('SELECT images FROM products WHERE id = :id');
