@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Store\Models\Product;
+use Store\Services\HtmlSanitizer;
 
 $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $product = $id ? Product::find($id) : null;
@@ -78,7 +79,7 @@ require __DIR__ . '/partials/header.php';
 
         <div class="long-description">
             <h2>Description</h2>
-            <p><?= nl2br(htmlspecialchars($product['long_description'])) ?></p>
+            <?= HtmlSanitizer::clean($product['long_description']) ?>
         </div>
     </div>
 </section>

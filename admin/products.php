@@ -11,11 +11,42 @@ use Store\Models\Supplier;
 use Store\Models\Variant;
 use Store\Services\AdminAuth;
 use Store\Services\Csrf;
+use Store\Services\HtmlSanitizer;
+use Store\Services\ProductImageManager;
 use Store\Services\ProductUpdater;
 
 AdminAuth::requireAuth();
 
 const IMPORT_STATUSES = ['created', 'imported', 'invalid', 'update', 'approved'];
+
+/**
+ * Renders a contenteditable rich-text editor backed by a hidden
+ * textarea[name=long_description] that admin.js keeps in sync on every
+ * edit — the server side only ever sees plain textarea POST data, so
+ * Product::update()/the create handler don't need to change. $html must
+ * already be sanitized (HtmlSanitizer::clean()) — it's written directly
+ * into the editor's markup so formatting round-trips correctly.
+ */
+function wysiwyg_field(string $html): string
+{
+    ob_start();
+    ?>
+    <div class="wysiwyg" data-wysiwyg>
+        <div class="wysiwyg-toolbar" role="toolbar" aria-label="Formatting">
+            <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" data-cmd="underline" title="Underline"><u>U</u></button>
+            <button type="button" data-cmd="insertUnorderedList" title="Bullet list">&bull; List</button>
+            <button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+            <button type="button" data-cmd="createLink" title="Insert link">&#128279;</button>
+            <button type="button" data-cmd="removeFormat" title="Clear formatting">&times;</button>
+        </div>
+        <div class="wysiwyg-editor" contenteditable="true"><?= $html ?></div>
+        <textarea name="long_description" hidden><?= htmlspecialchars($html) ?></textarea>
+    </div>
+    <?php
+    return ob_get_clean();
+}
 
 $pdo = Database::connection();
 $message = null;
@@ -49,23 +80,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'category_id' => (int) ($_POST['category_id'] ?? 0),
             'supplier_id' => ((int) ($_POST['supplier_id'] ?? 0)) ?: null,
             'short_description' => trim((string) ($_POST['short_description'] ?? '')),
-            'long_description' => trim((string) ($_POST['long_description'] ?? '')),
+            'long_description' => HtmlSanitizer::clean((string) ($_POST['long_description'] ?? '')),
         ]);
         $message = 'Product updated.';
+        $expandedId = $id;
+    } elseif ($action === 'upload_images' && $id > 0) {
+        $files = $_FILES['images']['name'] ?? [];
+        $uploaded = 0;
+        $errors = [];
+
+        foreach (array_keys((array) $files) as $i) {
+            if (($_FILES['images']['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+
+            $file = [
+                'name'     => $_FILES['images']['name'][$i],
+                'type'     => $_FILES['images']['type'][$i],
+                'tmp_name' => $_FILES['images']['tmp_name'][$i],
+                'error'    => $_FILES['images']['error'][$i],
+                'size'     => $_FILES['images']['size'][$i],
+            ];
+
+            try {
+                ProductImageManager::addUpload($id, $file);
+                $uploaded++;
+            } catch (Throwable $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
+        $message = $uploaded > 0 ? "Uploaded {$uploaded} image(s)." : 'No images were uploaded.';
+        if (!empty($errors)) {
+            $message .= ' ' . implode(' ', $errors);
+            $messageType = $uploaded > 0 ? 'success' : 'error';
+        }
+        $expandedId = $id;
+    } elseif ($action === 'delete_image' && $id > 0) {
+        ProductImageManager::remove($id, (string) ($_POST['path'] ?? ''));
+        $message = 'Image removed.';
+        $expandedId = $id;
+    } elseif ($action === 'set_main_image' && $id > 0) {
+        ProductImageManager::setMain($id, (string) ($_POST['path'] ?? ''));
+        $message = 'Main image updated.';
         $expandedId = $id;
     } elseif ($action === 'create') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $categoryId = (int) ($_POST['category_id'] ?? 0);
         $supplierId = (int) ($_POST['supplier_id'] ?? 0);
         $shortDesc = trim((string) ($_POST['short_description'] ?? ''));
-        $longDesc = trim((string) ($_POST['long_description'] ?? ''));
+        $longDesc = HtmlSanitizer::clean((string) ($_POST['long_description'] ?? ''));
+        $longDescHasText = trim(strip_tags($longDesc)) !== '';
         $label = trim((string) ($_POST['label'] ?? ''));
         $unit = trim((string) ($_POST['unit'] ?? ''));
         $price = (float) ($_POST['price'] ?? 0);
         $stock = (int) ($_POST['stock'] ?? 0);
         $sku = trim((string) ($_POST['sku'] ?? ''));
 
-        if ($name && $categoryId && $shortDesc && $longDesc && $sku && $price > 0) {
+        if ($name && $categoryId && $shortDesc && $longDescHasText && $sku && $price > 0) {
             $pdo->beginTransaction();
             try {
                 $stmt = $pdo->prepare("
@@ -114,6 +186,7 @@ $categories = Category::all();
 $suppliers = Supplier::all();
 $products = $pdo->query("
     SELECT p.id, p.name, p.category_id, p.supplier_id, p.short_description, p.long_description,
+           p.image_path, p.images,
            c.name AS category_name, s.name AS supplier_name,
            p.import_status, COUNT(v.id) AS variant_count
     FROM products p
@@ -190,7 +263,8 @@ require __DIR__ . '/partials/header.php';
 
         <label>Name <input type="text" name="name" required></label>
         <label>Short description <input type="text" name="short_description" required></label>
-        <label>Long description <textarea name="long_description" rows="4" required></textarea></label>
+        <label>Long description</label>
+        <?= wysiwyg_field('') ?>
 
         <h3>First variant</h3>
         <div class="form-row">
@@ -275,74 +349,127 @@ require __DIR__ . '/partials/header.php';
             <tr class="edit-row" id="edit-<?= $pid ?>" <?= $isOpen ? '' : 'hidden' ?>>
                 <td colspan="7">
                     <div class="edit-block">
-                        <form method="post" class="edit-form">
-                            <?= Csrf::field() ?>
-                            <input type="hidden" name="action" value="update">
-                            <input type="hidden" name="id" value="<?= $pid ?>">
+                        <div class="images-panel">
+                            <h3>Images</h3>
+                            <?php
+                                $images = json_decode((string) ($p['images'] ?? ''), true);
+                                $images = is_array($images) ? array_values(array_filter($images, 'is_string')) : [];
+                                if (empty($images) && !empty($p['image_path'])) {
+                                    $images = [$p['image_path']];
+                                }
+                            ?>
+                            <?php if (empty($images)): ?>
+                                <p class="field-hint">No images yet — upload one below.</p>
+                            <?php else: ?>
+                                <div class="image-grid">
+                                    <?php foreach ($images as $i => $img): ?>
+                                        <div class="image-thumb <?= $i === 0 ? 'is-main' : '' ?>">
+                                            <img src="/<?= htmlspecialchars($img) ?>" alt="">
+                                            <?php if ($i === 0): ?><span class="main-badge">main</span><?php endif; ?>
+                                            <div class="image-thumb-actions">
+                                                <?php if ($i !== 0): ?>
+                                                    <form method="post" class="inline-form">
+                                                        <?= Csrf::field() ?>
+                                                        <input type="hidden" name="action" value="set_main_image">
+                                                        <input type="hidden" name="id" value="<?= $pid ?>">
+                                                        <input type="hidden" name="path" value="<?= htmlspecialchars($img) ?>">
+                                                        <button type="submit" class="icon-btn" title="Set as main image">&#9733;</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                                <form method="post" class="inline-form"
+                                                      onsubmit="return confirm('Remove this image?');">
+                                                    <?= Csrf::field() ?>
+                                                    <input type="hidden" name="action" value="delete_image">
+                                                    <input type="hidden" name="id" value="<?= $pid ?>">
+                                                    <input type="hidden" name="path" value="<?= htmlspecialchars($img) ?>">
+                                                    <button type="submit" class="icon-btn icon-btn-danger" title="Remove image">&#128465;</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
 
-                            <div class="form-row">
-                                <label>Name
-                                    <input type="text" name="name" value="<?= htmlspecialchars($p['name']) ?>" required>
+                            <form method="post" enctype="multipart/form-data" class="upload-form">
+                                <?= Csrf::field() ?>
+                                <input type="hidden" name="action" value="upload_images">
+                                <input type="hidden" name="id" value="<?= $pid ?>">
+                                <label>Add images
+                                    <input type="file" name="images[]" accept="image/png,image/jpeg,image/webp,image/gif" multiple required>
                                 </label>
-                                <label>Category
-                                    <select name="category_id" required>
-                                        <?php foreach ($categories as $cat): ?>
-                                            <option value="<?= (int) $cat['id'] ?>" <?= (int) $p['category_id'] === (int) $cat['id'] ? 'selected' : '' ?>>
-                                                <?= htmlspecialchars($cat['name']) ?>
+                                <button type="submit" class="btn-secondary">Upload</button>
+                            </form>
+                        </div>
+
+                        <div class="edit-block-grid">
+                            <form method="post" class="edit-form">
+                                <?= Csrf::field() ?>
+                                <input type="hidden" name="action" value="update">
+                                <input type="hidden" name="id" value="<?= $pid ?>">
+
+                                <div class="form-row">
+                                    <label>Name
+                                        <input type="text" name="name" value="<?= htmlspecialchars($p['name']) ?>" required>
+                                    </label>
+                                    <label>Category
+                                        <select name="category_id" required>
+                                            <?php foreach ($categories as $cat): ?>
+                                                <option value="<?= (int) $cat['id'] ?>" <?= (int) $p['category_id'] === (int) $cat['id'] ? 'selected' : '' ?>>
+                                                    <?= htmlspecialchars($cat['name']) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <label>Supplier
+                                    <select name="supplier_id">
+                                        <option value="0">— none —</option>
+                                        <?php foreach ($suppliers as $sup): ?>
+                                            <option value="<?= (int) $sup['id'] ?>" <?= (int) $p['supplier_id'] === (int) $sup['id'] ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($sup['name']) ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
                                 </label>
+
+                                <label>Short description
+                                    <input type="text" name="short_description" value="<?= htmlspecialchars($p['short_description']) ?>" required>
+                                </label>
+                                <label>Long description</label>
+                                <?= wysiwyg_field(HtmlSanitizer::clean((string) $p['long_description'])) ?>
+
+                                <button type="submit" class="btn-primary">Save changes</button>
+                            </form>
+
+                            <div class="variants-panel">
+                                <h3>Variants</h3>
+                                <?php if (empty($variantsByProduct[$pid])): ?>
+                                    <p class="field-hint">No variants yet.</p>
+                                <?php else: ?>
+                                    <table class="variants-table">
+                                        <thead>
+                                            <tr><th>SKU</th><th>Label</th><th>Unit</th><th>Price</th><th>Stock</th><th>Active</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($variantsByProduct[$pid] as $v): ?>
+                                                <tr>
+                                                    <td><?= htmlspecialchars($v['sku']) ?></td>
+                                                    <td><?= htmlspecialchars((string) ($v['label'] ?? '—')) ?></td>
+                                                    <td><?= htmlspecialchars((string) ($v['unit'] ?? '—')) ?></td>
+                                                    <td><?= number_format((float) $v['price'], 2) ?>€</td>
+                                                    <td><?= (int) $v['stock'] ?></td>
+                                                    <td>
+                                                        <span class="status-badge" data-status="<?= $v['is_active'] ? 'approved' : 'invalid' ?>">
+                                                            <?= $v['is_active'] ? 'yes' : 'no' ?>
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                <?php endif; ?>
                             </div>
-
-                            <label>Supplier
-                                <select name="supplier_id">
-                                    <option value="0">— none —</option>
-                                    <?php foreach ($suppliers as $sup): ?>
-                                        <option value="<?= (int) $sup['id'] ?>" <?= (int) $p['supplier_id'] === (int) $sup['id'] ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($sup['name']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-
-                            <label>Short description
-                                <input type="text" name="short_description" value="<?= htmlspecialchars($p['short_description']) ?>" required>
-                            </label>
-                            <label>Long description
-                                <textarea name="long_description" rows="4" required><?= htmlspecialchars($p['long_description']) ?></textarea>
-                            </label>
-
-                            <button type="submit" class="btn-primary">Save changes</button>
-                        </form>
-
-                        <div class="variants-panel">
-                            <h3>Variants</h3>
-                            <?php if (empty($variantsByProduct[$pid])): ?>
-                                <p class="field-hint">No variants yet.</p>
-                            <?php else: ?>
-                                <table class="variants-table">
-                                    <thead>
-                                        <tr><th>SKU</th><th>Label</th><th>Unit</th><th>Price</th><th>Stock</th><th>Active</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($variantsByProduct[$pid] as $v): ?>
-                                            <tr>
-                                                <td><?= htmlspecialchars($v['sku']) ?></td>
-                                                <td><?= htmlspecialchars((string) ($v['label'] ?? '—')) ?></td>
-                                                <td><?= htmlspecialchars((string) ($v['unit'] ?? '—')) ?></td>
-                                                <td><?= number_format((float) $v['price'], 2) ?>€</td>
-                                                <td><?= (int) $v['stock'] ?></td>
-                                                <td>
-                                                    <span class="status-badge" data-status="<?= $v['is_active'] ? 'approved' : 'invalid' ?>">
-                                                        <?= $v['is_active'] ? 'yes' : 'no' ?>
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </td>
