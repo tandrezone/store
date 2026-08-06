@@ -440,6 +440,7 @@ require __DIR__ . '/partials/header.php';
         <tr>
             <th><input type="checkbox" id="select-all-products" title="Select all"></th>
             <th></th>
+            <th>ID</th>
             <th></th>
             <th><?= sort_link('name', 'Name', $sort, $dir, $statusFilter) ?></th>
             <th><?= sort_link('category', 'Category', $sort, $dir, $statusFilter) ?></th>
@@ -462,6 +463,7 @@ require __DIR__ . '/partials/header.php';
                         <span class="chevron">›</span>
                     </button>
                 </td>
+                <td class="tabular"><?= $pid ?></td>
                 <td>
                     <?php if (!empty($p['image_path'])): ?>
                         <img src="/<?= htmlspecialchars($p['image_path']) ?>" alt="" class="product-thumb">
@@ -510,7 +512,7 @@ require __DIR__ . '/partials/header.php';
             </tr>
 
             <tr class="edit-row" id="edit-<?= $pid ?>" <?= $isOpen ? '' : 'hidden' ?>>
-                <td colspan="9">
+                <td colspan="10">
                     <div class="edit-block">
                         <div class="images-panel">
                             <h3>Images</h3>
@@ -639,7 +641,7 @@ require __DIR__ . '/partials/header.php';
             </tr>
 
             <tr class="magic-row" id="magic-<?= $pid ?>" hidden>
-                <td colspan="9">
+                <td colspan="10">
                     <div class="magic-block" data-product-id="<?= $pid ?>">
                         <h3>✨ Magic edit</h3>
                         <p class="field-hint">
