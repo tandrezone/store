@@ -38,6 +38,7 @@ CREATE TABLE products (
     short_description VARCHAR(280) NOT NULL,
     long_description TEXT NOT NULL,
     image_path VARCHAR(255) DEFAULT NULL,
+    images JSON DEFAULT NULL COMMENT 'array of image paths (relative to /public) for the product detail slideshow; first entry is the main image',
     import_status ENUM('created', 'imported', 'invalid', 'update', 'approved') NOT NULL DEFAULT 'created'
         COMMENT 'created = manual default; imported = came from a supplier feed; invalid/update = admin review flags; approved = visible on the storefront',
     is_active TINYINT(1) NOT NULL DEFAULT 1,

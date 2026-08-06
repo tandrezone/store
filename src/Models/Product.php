@@ -63,7 +63,9 @@ class Product
             return null;
         }
 
-        $product['image_path'] = self::resolveImagePath($product);
+        $images = self::resolveImages($product);
+        $product['images'] = $images;
+        $product['image_path'] = $images[0];
         $product['variants'] = self::variantsForProduct($id);
 
         return $product;
@@ -135,6 +137,26 @@ class Product
         }
 
         return DefaultProductImage::pathFor($product);
+    }
+
+    /**
+     * Returns the product detail slideshow images: the decoded `images`
+     * column, filtered to paths that still exist on disk (in case a file
+     * was moved/deleted after import). Falls back to a single-element
+     * array with the regular placeholder/image_path resolution when there
+     * are no valid entries, so callers always get at least one image.
+     */
+    private static function resolveImages(array $product): array
+    {
+        $decoded = json_decode((string) ($product['images'] ?? ''), true);
+        $paths = is_array($decoded) ? $decoded : [];
+
+        $valid = array_values(array_filter(
+            $paths,
+            static fn ($path) => is_string($path) && $path !== '' && is_file(__DIR__ . '/../../public/' . $path)
+        ));
+
+        return !empty($valid) ? $valid : [self::resolveImagePath($product)];
     }
 
     /**

@@ -91,5 +91,29 @@
         });
     });
 
+    // --- Product page: image gallery ---
+    document.querySelectorAll('[data-gallery]').forEach((gallery) => {
+        const slides = Array.from(gallery.querySelectorAll('.gallery-slide'));
+        const thumbs = Array.from(gallery.querySelectorAll('.gallery-thumb'));
+        if (slides.length <= 1) return;
+
+        let current = 0;
+
+        function show(index) {
+            current = (index + slides.length) % slides.length;
+            slides.forEach((slide, i) => slide.classList.toggle('is-active', i === current));
+            thumbs.forEach((thumb, i) => thumb.classList.toggle('is-active', i === current));
+        }
+
+        thumbs.forEach((thumb) => {
+            thumb.addEventListener('click', () => show(Number(thumb.dataset.index)));
+        });
+
+        const prevBtn = gallery.querySelector('.gallery-prev');
+        const nextBtn = gallery.querySelector('.gallery-next');
+        if (prevBtn) prevBtn.addEventListener('click', () => show(current - 1));
+        if (nextBtn) nextBtn.addEventListener('click', () => show(current + 1));
+    });
+
     refreshCartCount();
 })();
