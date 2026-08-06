@@ -410,7 +410,7 @@ class ProductImporter
     {
         $id = self::firstString($item, ['id', 'product_id', 'productId', 'external_id', 'externalId', 'sku', 'code']);
         $name = self::firstString($item, ['name', 'title', 'product_name', 'productName']);
-        $slug = self::firstString($item, ['slug', 'short_description', 'shortDescription']);
+        $slug = self::firstString($item, ['slug', 'handle', 'url_key', 'urlKey']);
         $description = self::firstString($item, ['description', 'long_description', 'longDescription', 'details']);
 
         $category = '';
@@ -431,7 +431,7 @@ class ProductImporter
 
         if ($variants === [] && (isset($item['price']) || isset($item['cost']) || isset($item['stock']) || isset($item['quantity']) || isset($item['qty']))) {
             $variants = [[
-                'sku' => self::firstString($item, ['sku', 'code', 'id']),
+                'sku' => self::firstString($item, ['sku', 'code']),
                 'label' => self::firstString($item, ['label', 'size', 'pack', 'pack_size', 'packSize']),
                 'unit' => self::firstString($item, ['unit', 'unit_type', 'unitType']),
                 'price' => $item['price'] ?? $item['cost'] ?? null,
@@ -493,7 +493,12 @@ class ProductImporter
                 }
             }
 
-            return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+            $bool = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($bool !== null) {
+                return $bool;
+            }
+
+            return (bool) $value;
         }
 
         return true;
