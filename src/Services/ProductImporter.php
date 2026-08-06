@@ -435,7 +435,7 @@ class ProductImporter
 
         if ($variants === [] && (isset($item['price']) || isset($item['cost']) || isset($item['stock']) || isset($item['quantity']) || isset($item['qty']))) {
             $variants = [[
-                'sku' => self::firstString($item, ['sku', 'code']),
+                'sku' => self::firstString($item, ['variant_sku', 'variantSku']),
                 'label' => self::firstString($item, ['label', 'size', 'pack', 'pack_size', 'packSize']),
                 'unit' => self::firstString($item, ['unit', 'unit_type', 'unitType']),
                 'price' => $item['price'] ?? $item['cost'] ?? null,
@@ -495,6 +495,8 @@ class ProductImporter
                 if (in_array($value, ['inactive', 'disabled', 'unavailable', 'draft'], true)) {
                     return false;
                 }
+
+                return false;
             }
 
             $bool = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
