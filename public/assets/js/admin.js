@@ -23,7 +23,14 @@
     const selectAll = document.getElementById('select-all-products');
 
     function updateBulkCount() {
-        if (bulkCount) bulkCount.textContent = document.querySelectorAll('.product-select:checked').length + ' selected';
+        const boxes = Array.from(productChecks());
+        const checkedCount = boxes.filter((cb) => cb.checked).length;
+
+        if (bulkCount) bulkCount.textContent = checkedCount + ' selected';
+        if (selectAll) {
+            selectAll.checked = boxes.length > 0 && checkedCount === boxes.length;
+            selectAll.indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+        }
     }
 
     if (selectAll) {

@@ -106,9 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } else {
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $pdo->prepare("UPDATE products SET import_status = ? WHERE id IN ({$placeholders})")
-                ->execute([$status, ...array_values($ids)]);
-            $message = 'Updated status for ' . count($ids) . ' product(s).';
+            $stmt = $pdo->prepare("UPDATE products SET import_status = ? WHERE id IN ({$placeholders})");
+            $stmt->execute([$status, ...array_values($ids)]);
+            $message = 'Updated status for ' . $stmt->rowCount() . ' product(s).';
         }
     } elseif ($action === 'update' && $id > 0) {
         Product::update($id, [
@@ -223,7 +223,10 @@ const SORT_COLUMNS = [
     'category' => 'c.name',
     'supplier' => 's.name',
     'variants' => 'variant_count',
-    'status' => 'p.import_status',
+    // import_status is a MySQL ENUM, so ordering by the column directly
+    // sorts by declaration order, not alphabetically — CAST to CHAR so
+    // the ▲/▼ arrows match what they visually promise.
+    'status' => 'CAST(p.import_status AS CHAR)',
 ];
 
 /**
@@ -248,6 +251,21 @@ function sort_link(string $column, string $label, string $sort, string $dir, str
     return '<a href="' . htmlspecialchars($href) . '" class="sort-link">' . htmlspecialchars($label) . $arrow . '</a>';
 }
 
+/** Renders a pagination link, preserving the active sort/filter. */
+function page_url(int $page, string $sort, string $dir, string $statusFilter): string
+{
+    $query = ['page' => $page];
+    if ($statusFilter !== '') {
+        $query['status'] = $statusFilter;
+    }
+    if ($sort !== '') {
+        $query['sort'] = $sort;
+        $query['dir'] = $dir;
+    }
+
+    return '/admin/products.php?' . http_build_query($query);
+}
+
 $statusFilter = trim((string) ($_GET['status'] ?? ''));
 if (!in_array($statusFilter, IMPORT_STATUSES, true)) {
     $statusFilter = '';
@@ -259,8 +277,28 @@ if (!array_key_exists($sort, SORT_COLUMNS)) {
 }
 $dir = strtolower((string) ($_GET['dir'] ?? '')) === 'desc' ? 'desc' : 'asc';
 
+$perPage = 50;
+$page = max(1, (int) ($_GET['page'] ?? 1));
+
 $categories = Category::all();
 $suppliers = Supplier::all();
+
+$productsParams = [];
+$countSql = 'SELECT COUNT(*) FROM products p';
+if ($statusFilter !== '') {
+    $countSql .= ' WHERE p.import_status = :status';
+    $productsParams['status'] = $statusFilter;
+}
+$countStmt = $pdo->prepare($countSql);
+$countStmt->execute($productsParams);
+$totalProducts = (int) $countStmt->fetchColumn();
+
+$totalPages = max(1, (int) ceil($totalProducts / $perPage));
+if ($page > $totalPages) {
+    $page = $totalPages;
+}
+$offset = ($page - 1) * $perPage;
+
 $productsSql = "
     SELECT p.id, p.name, p.category_id, p.supplier_id, p.short_description, p.long_description,
            p.image_path, p.images,
@@ -271,15 +309,14 @@ $productsSql = "
     LEFT JOIN suppliers s ON s.id = p.supplier_id
     LEFT JOIN product_variants v ON v.product_id = p.id
 ";
-$productsParams = [];
 if ($statusFilter !== '') {
     $productsSql .= ' WHERE p.import_status = :status';
-    $productsParams['status'] = $statusFilter;
 }
 $productsSql .= ' GROUP BY p.id';
 $productsSql .= $sort !== ''
     ? " ORDER BY " . SORT_COLUMNS[$sort] . " {$dir}"
     : ' ORDER BY p.created_at DESC';
+$productsSql .= " LIMIT {$perPage} OFFSET {$offset}";
 
 $productsStmt = $pdo->prepare($productsSql);
 $productsStmt->execute($productsParams);
@@ -386,10 +423,11 @@ require __DIR__ . '/partials/header.php';
 <form id="bulk-form" method="post" class="bulk-actions">
     <?= Csrf::field() ?>
     <span class="bulk-count" data-bulk-count>0 selected</span>
-    <button type="submit" name="action" value="bulk_delete" class="icon-btn icon-btn-danger" title="Delete selected">
+    <button type="submit" name="action" value="bulk_delete" class="btn-danger" title="Delete selected">
         🗑 Delete selected
     </button>
-    <select name="status" class="status-select">
+    <select name="status" class="status-select" required>
+        <option value="" disabled selected>— choose status —</option>
         <?php foreach (IMPORT_STATUSES as $status): ?>
             <option value="<?= htmlspecialchars($status) ?>"><?= htmlspecialchars($status) ?></option>
         <?php endforeach; ?>
@@ -612,6 +650,16 @@ require __DIR__ . '/partials/header.php';
         <?php endforeach; ?>
     </tbody>
 </table>
+
+<?php if ($totalPages > 1): ?>
+    <div class="pagination">
+        <a href="<?= htmlspecialchars(page_url(max(1, $page - 1), $sort, $dir, $statusFilter)) ?>"
+           class="btn-secondary <?= $page <= 1 ? 'is-disabled' : '' ?>">‹ Prev</a>
+        <span class="bulk-count">Page <?= $page ?> of <?= $totalPages ?></span>
+        <a href="<?= htmlspecialchars(page_url(min($totalPages, $page + 1), $sort, $dir, $statusFilter)) ?>"
+           class="btn-secondary <?= $page >= $totalPages ? 'is-disabled' : '' ?>">Next ›</a>
+    </div>
+<?php endif; ?>
 
 <script src="/assets/js/admin.js"></script>
 
