@@ -31,11 +31,13 @@ use Throwable;
 class ProductUpdater
 {
     private const IMAGE_TEXT_REMOVAL_PROMPT = <<<PROMPT
-        Remove any text, watermarks, logos, price stickers, or labels
-        overlaid on this product photo. Keep the product itself, its
-        packaging, colors, proportions, and background exactly as they
-        are — only erase overlaid text/graphic elements and cleanly fill
-        in what was behind them. Return the edited image.
+        Remove all text, watermarks, price stickers, labels, and logos
+        from this product photo — including any logo or brand mark
+        printed directly on the product or its packaging, not just ones
+        overlaid on top of the photo. Keep the product's shape, packaging
+        design, colors, proportions, and background otherwise unchanged,
+        cleanly filling in whatever was underneath each removed element.
+        Return the edited image.
         PROMPT;
 
     public static function runAll(): array
