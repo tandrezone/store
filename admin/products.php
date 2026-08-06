@@ -74,6 +74,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Could not delete: it is referenced by existing orders.';
             $messageType = 'error';
         }
+    } elseif ($action === 'bulk_delete') {
+        $ids = array_unique(array_filter(array_map('intval', (array) ($_POST['ids'] ?? [])), fn ($v) => $v > 0));
+
+        if (empty($ids)) {
+            $message = 'No products selected.';
+            $messageType = 'error';
+        } else {
+            $deleted = 0;
+            $failed = 0;
+            foreach ($ids as $bulkId) {
+                try {
+                    Product::delete($bulkId);
+                    $deleted++;
+                } catch (Throwable $e) {
+                    $failed++;
+                }
+            }
+            $message = "Deleted {$deleted} product(s).";
+            if ($failed > 0) {
+                $message .= " {$failed} could not be deleted (referenced by existing orders).";
+                $messageType = $deleted > 0 ? 'success' : 'error';
+            }
+        }
+    } elseif ($action === 'bulk_set_status') {
+        $ids = array_unique(array_filter(array_map('intval', (array) ($_POST['ids'] ?? [])), fn ($v) => $v > 0));
+        $status = (string) ($_POST['status'] ?? '');
+
+        if (empty($ids) || !in_array($status, IMPORT_STATUSES, true)) {
+            $message = 'No products selected or invalid status.';
+            $messageType = 'error';
+        } else {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $pdo->prepare("UPDATE products SET import_status = ? WHERE id IN ({$placeholders})")
+                ->execute([$status, ...array_values($ids)]);
+            $message = 'Updated status for ' . count($ids) . ' product(s).';
+        }
     } elseif ($action === 'update' && $id > 0) {
         Product::update($id, [
             'name' => trim((string) ($_POST['name'] ?? '')),
@@ -182,10 +218,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+const SORT_COLUMNS = [
+    'name' => 'p.name',
+    'category' => 'c.name',
+    'supplier' => 's.name',
+    'variants' => 'variant_count',
+    'status' => 'p.import_status',
+];
+
+/**
+ * Renders a sortable column header link, toggling direction on repeat
+ * clicks and preserving the active status filter.
+ */
+function sort_link(string $column, string $label, string $sort, string $dir, string $statusFilter): string
+{
+    $nextDir = ($sort === $column && $dir === 'asc') ? 'desc' : 'asc';
+    $query = ['sort' => $column, 'dir' => $nextDir];
+    if ($statusFilter !== '') {
+        $query['status'] = $statusFilter;
+    }
+
+    $arrow = '';
+    if ($sort === $column) {
+        $arrow = $dir === 'asc' ? ' ▲' : ' ▼';
+    }
+
+    $href = '/admin/products.php?' . http_build_query($query);
+
+    return '<a href="' . htmlspecialchars($href) . '" class="sort-link">' . htmlspecialchars($label) . $arrow . '</a>';
+}
+
 $statusFilter = trim((string) ($_GET['status'] ?? ''));
 if (!in_array($statusFilter, IMPORT_STATUSES, true)) {
     $statusFilter = '';
 }
+
+$sort = (string) ($_GET['sort'] ?? '');
+if (!array_key_exists($sort, SORT_COLUMNS)) {
+    $sort = '';
+}
+$dir = strtolower((string) ($_GET['dir'] ?? '')) === 'desc' ? 'desc' : 'asc';
 
 $categories = Category::all();
 $suppliers = Supplier::all();
@@ -204,7 +276,10 @@ if ($statusFilter !== '') {
     $productsSql .= ' WHERE p.import_status = :status';
     $productsParams['status'] = $statusFilter;
 }
-$productsSql .= ' GROUP BY p.id ORDER BY p.created_at DESC';
+$productsSql .= ' GROUP BY p.id';
+$productsSql .= $sort !== ''
+    ? " ORDER BY " . SORT_COLUMNS[$sort] . " {$dir}"
+    : ' ORDER BY p.created_at DESC';
 
 $productsStmt = $pdo->prepare($productsSql);
 $productsStmt->execute($productsParams);
@@ -308,15 +383,30 @@ require __DIR__ . '/partials/header.php';
     <?php endforeach; ?>
 </div>
 
+<form id="bulk-form" method="post" class="bulk-actions">
+    <?= Csrf::field() ?>
+    <span class="bulk-count" data-bulk-count>0 selected</span>
+    <button type="submit" name="action" value="bulk_delete" class="icon-btn icon-btn-danger" title="Delete selected">
+        🗑 Delete selected
+    </button>
+    <select name="status" class="status-select">
+        <?php foreach (IMPORT_STATUSES as $status): ?>
+            <option value="<?= htmlspecialchars($status) ?>"><?= htmlspecialchars($status) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <button type="submit" name="action" value="bulk_set_status" class="btn-secondary">Set status</button>
+</form>
+
 <table class="cart-table admin-table">
     <thead>
         <tr>
+            <th><input type="checkbox" id="select-all-products" title="Select all"></th>
             <th></th>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Supplier</th>
-            <th>Variants</th>
-            <th>Status</th>
+            <th><?= sort_link('name', 'Name', $sort, $dir, $statusFilter) ?></th>
+            <th><?= sort_link('category', 'Category', $sort, $dir, $statusFilter) ?></th>
+            <th><?= sort_link('supplier', 'Supplier', $sort, $dir, $statusFilter) ?></th>
+            <th><?= sort_link('variants', 'Variants', $sort, $dir, $statusFilter) ?></th>
+            <th><?= sort_link('status', 'Status', $sort, $dir, $statusFilter) ?></th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -324,6 +414,9 @@ require __DIR__ . '/partials/header.php';
         <?php foreach ($products as $p): ?>
             <?php $pid = (int) $p['id']; $isOpen = $expandedId === $pid; ?>
             <tr class="product-row <?= $isOpen ? 'is-open' : '' ?>" data-product-id="<?= $pid ?>">
+                <td>
+                    <input type="checkbox" form="bulk-form" name="ids[]" value="<?= $pid ?>" class="product-select">
+                </td>
                 <td>
                     <button type="button" class="row-toggle" data-target="edit-<?= $pid ?>"
                             aria-expanded="<?= $isOpen ? 'true' : 'false' ?>" title="Expand to edit">
@@ -371,7 +464,7 @@ require __DIR__ . '/partials/header.php';
             </tr>
 
             <tr class="edit-row" id="edit-<?= $pid ?>" <?= $isOpen ? '' : 'hidden' ?>>
-                <td colspan="7">
+                <td colspan="8">
                     <div class="edit-block">
                         <div class="images-panel">
                             <h3>Images</h3>
@@ -500,7 +593,7 @@ require __DIR__ . '/partials/header.php';
             </tr>
 
             <tr class="magic-row" id="magic-<?= $pid ?>" hidden>
-                <td colspan="7">
+                <td colspan="8">
                     <div class="magic-block" data-product-id="<?= $pid ?>">
                         <h3>✨ Magic edit</h3>
                         <p class="field-hint">

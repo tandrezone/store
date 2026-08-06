@@ -18,6 +18,40 @@
         btn.addEventListener('click', () => toggleRow(btn.dataset.target, btn));
     });
 
+    const productChecks = () => document.querySelectorAll('.product-select');
+    const bulkCount = document.querySelector('[data-bulk-count]');
+    const selectAll = document.getElementById('select-all-products');
+
+    function updateBulkCount() {
+        if (bulkCount) bulkCount.textContent = document.querySelectorAll('.product-select:checked').length + ' selected';
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', () => {
+            productChecks().forEach((cb) => { cb.checked = selectAll.checked; });
+            updateBulkCount();
+        });
+    }
+
+    productChecks().forEach((cb) => cb.addEventListener('change', updateBulkCount));
+    updateBulkCount();
+
+    const bulkForm = document.getElementById('bulk-form');
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', (e) => {
+            const checked = document.querySelectorAll('.product-select:checked').length;
+            if (checked === 0) {
+                e.preventDefault();
+                alert('Select at least one product first.');
+                return;
+            }
+            if (e.submitter && e.submitter.value === 'bulk_delete'
+                && !confirm('Delete ' + checked + ' selected product(s)? This cannot be undone.')) {
+                e.preventDefault();
+            }
+        });
+    }
+
     document.querySelectorAll('.magic-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
             const row = document.getElementById(btn.dataset.target);
