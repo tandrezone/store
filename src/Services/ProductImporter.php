@@ -48,6 +48,11 @@ use Throwable;
  * image columns are left untouched if none of the URLs for an item can be
  * downloaded, rather than being cleared out.
  *
+ * Both fields may be a full URL or a path relative to the supplier's own
+ * site (e.g. "/uploads/photo.jpg") — some feeds serve their own uploads
+ * that way while linking gallery photos on a third-party host. Relative
+ * paths are resolved against list_products_url's origin before download.
+ *
  * variant.label and variant.unit are sanitized on the way in — label is
  * stripped to digits only (pack quantity, e.g. "6 pack" -> "6") and unit
  * to letters only (e.g. "5kg" -> "kg") — since suppliers mix the two
@@ -80,10 +85,11 @@ class ProductImporter
 
         $result['fetched'] = count($items);
         $pdo = Database::connection();
+        $origin = self::originOf($supplier['list_products_url']);
 
         foreach ($items as $item) {
             try {
-                $outcome = self::importItem($pdo, (int) $supplier['id'], $item);
+                $outcome = self::importItem($pdo, (int) $supplier['id'], $item, $origin);
                 if ($outcome !== null) {
                     $result[$outcome]++;
                 } else {
@@ -148,7 +154,7 @@ class ProductImporter
     /**
      * Returns 'imported', 'updated', or null (skipped) for this item.
      */
-    private static function importItem(PDO $pdo, int $supplierId, array $item): ?string
+    private static function importItem(PDO $pdo, int $supplierId, array $item, string $origin = ''): ?string
     {
         $externalId = trim((string) ($item['id'] ?? ''));
         $isActive = filter_var($item['isActive'] ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -176,7 +182,7 @@ class ProductImporter
             // Images refresh on every re-import, even after admin review —
             // only the fields below (name/description/pricing/variants) are
             // protected once a product leaves import_status = 'imported'.
-            self::syncImages($pdo, $productId, $item);
+            self::syncImages($pdo, $productId, $item, $origin);
 
             if ($existing['import_status'] !== 'imported') {
                 // Manually reviewed since the last import — leave everything
@@ -214,7 +220,7 @@ class ProductImporter
 
         $productId = (int) $pdo->lastInsertId();
         self::syncVariants($pdo, $productId, (array) ($item['variants'] ?? []));
-        self::syncImages($pdo, $productId, $item);
+        self::syncImages($pdo, $productId, $item, $origin);
 
         return 'imported';
     }
@@ -226,11 +232,11 @@ class ProductImporter
      * existing columns untouched if every URL fails or none were provided,
      * rather than clearing out a previously-downloaded set of images.
      */
-    private static function syncImages(PDO $pdo, int $productId, array $item): void
+    private static function syncImages(PDO $pdo, int $productId, array $item, string $origin = ''): void
     {
-        $mainUrl = trim((string) ($item['image'] ?? ''));
+        $mainUrl = self::resolveImageUrl((string) ($item['image'] ?? ''), $origin);
         $galleryUrls = array_map(
-            static fn ($url) => trim((string) $url),
+            static fn ($url) => self::resolveImageUrl((string) $url, $origin),
             array_values((array) ($item['images'] ?? []))
         );
 
@@ -257,6 +263,38 @@ class ProductImporter
                 'images' => json_encode($paths),
                 'id' => $productId,
             ]);
+    }
+
+    /** Returns "scheme://host[:port]" for $url, or '' if it can't be parsed. */
+    private static function originOf(string $url): string
+    {
+        $parts = parse_url($url);
+        if (empty($parts['scheme']) || empty($parts['host'])) {
+            return '';
+        }
+
+        $origin = $parts['scheme'] . '://' . $parts['host'];
+        if (!empty($parts['port'])) {
+            $origin .= ':' . $parts['port'];
+        }
+
+        return $origin;
+    }
+
+    /**
+     * Passes an already-absolute URL through unchanged; resolves a path
+     * relative to $origin (e.g. "/uploads/photo.jpg" + "https://x.test" ->
+     * "https://x.test/uploads/photo.jpg"). Returns '' if $url is empty, or
+     * if it's relative and $origin is unknown (unparseable feed URL).
+     */
+    private static function resolveImageUrl(string $url, string $origin): string
+    {
+        $url = trim($url);
+        if ($url === '' || preg_match('#^https?://#i', $url)) {
+            return $url;
+        }
+
+        return $origin !== '' ? $origin . '/' . ltrim($url, '/') : '';
     }
 
     private static function resolveCategoryId(PDO $pdo, string $categoryName): int
