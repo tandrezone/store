@@ -14,7 +14,7 @@ use Throwable;
 /**
  * Imports products from each supplier's list_products_url.
  *
- * Expected feed shape, fetched from list_products_url:
+ * Canonical feed shape used internally after normalization:
  * {
  *   "products": [
  *     {
@@ -32,6 +32,10 @@ use Throwable;
  *     }
  *   ]
  * }
+ *
+ * The importer accepts multiple supplier JSON shapes and normalizes common
+ * aliases (e.g. products/items/data wrappers, id/product_id, isActive/active,
+ * image/image_url, variants/options, etc.) into this canonical shape.
  *
  * Only items with isActive == true are imported. Re-running the import
  * matches existing rows by (supplier_id, external_id) and only updates
@@ -104,8 +108,8 @@ class ProductImporter
     }
 
     /**
-     * Fetches and decodes the feed, returning the flat list of product items
-     * regardless of whether the feed wraps them in a "products" key or not.
+    * Fetches and decodes the feed, returning a normalized product-item list
+    * from multiple supported supplier JSON structures.
      *
      * The hostname is resolved and validated once here, then curl is pinned
      * to that exact IP (CURLOPT_RESOLVE) so a DNS change between validation
@@ -143,12 +147,20 @@ class ProductImporter
             throw new RuntimeException('Feed did not return valid JSON: ' . $url);
         }
 
-        $items = $decoded['products'] ?? $decoded;
-        if (!is_array($items)) {
+        $items = self::extractItems($decoded);
+        if (empty($items)) {
             throw new RuntimeException('Feed did not contain a product list: ' . $url);
         }
 
-        return $items;
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $normalized[] = self::normalizeItem($item);
+        }
+
+        return $normalized;
     }
 
     /**
@@ -381,5 +393,136 @@ class ProductImporter
         $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
         $value = trim($value, '-');
         return $value !== '' ? $value : 'uncategorized';
+    }
+
+    private static function extractItems(array $decoded): array
+    {
+        foreach (['products', 'items', 'data'] as $key) {
+            if (isset($decoded[$key]) && is_array($decoded[$key])) {
+                return array_values($decoded[$key]);
+            }
+        }
+
+        return array_values($decoded);
+    }
+
+    private static function normalizeItem(array $item): array
+    {
+        $id = self::firstString($item, ['id', 'product_id', 'productId', 'external_id', 'externalId', 'sku', 'code']);
+        $name = self::firstString($item, ['name', 'title', 'product_name', 'productName']);
+        $slug = self::firstString($item, ['slug', 'short_description', 'shortDescription']);
+        $description = self::firstString($item, ['description', 'long_description', 'longDescription', 'details']);
+
+        $category = '';
+        if (isset($item['category'])) {
+            if (is_array($item['category'])) {
+                $category = trim((string) ($item['category']['name'] ?? $item['category']['title'] ?? ''));
+            } else {
+                $category = trim((string) $item['category']);
+            }
+        }
+        if ($category === '') {
+            $category = self::firstString($item, ['category_name', 'categoryName', 'department']);
+        }
+
+        $image = self::firstString($item, ['image', 'image_url', 'imageUrl', 'main_image', 'mainImage', 'photo']);
+        $images = self::firstArray($item, ['images', 'gallery', 'photos', 'image_urls', 'imageUrls']);
+        $variants = self::firstArray($item, ['variants', 'options', 'variant_list', 'variantList']);
+
+        if ($variants === [] && (isset($item['price']) || isset($item['cost']) || isset($item['stock']) || isset($item['quantity']) || isset($item['qty']))) {
+            $variants = [[
+                'sku' => self::firstString($item, ['sku', 'code', 'id']),
+                'label' => self::firstString($item, ['label', 'size', 'pack', 'pack_size', 'packSize']),
+                'unit' => self::firstString($item, ['unit', 'unit_type', 'unitType']),
+                'price' => $item['price'] ?? $item['cost'] ?? null,
+                'stock' => $item['stock'] ?? $item['quantity'] ?? $item['qty'] ?? null,
+            ]];
+        }
+
+        return [
+            'id' => $id,
+            'name' => $name,
+            'slug' => $slug,
+            'description' => $description,
+            'category' => ['name' => $category !== '' ? $category : 'Uncategorized'],
+            'isActive' => self::normalizeIsActive($item),
+            'image' => $image,
+            'images' => array_values(array_filter(array_map(
+                static fn ($v) => trim((string) $v),
+                array_values($images)
+            ), static fn (string $v) => $v !== '')),
+            'variants' => self::normalizeVariants($variants),
+        ];
+    }
+
+    private static function normalizeVariants(array $variants): array
+    {
+        $normalized = [];
+        foreach ($variants as $variant) {
+            if (!is_array($variant)) {
+                continue;
+            }
+
+            $normalized[] = [
+                'sku' => self::firstString($variant, ['sku', 'id', 'code']),
+                'label' => self::firstString($variant, ['label', 'size', 'pack', 'pack_size', 'packSize']),
+                'unit' => self::firstString($variant, ['unit', 'unit_type', 'unitType']),
+                'price' => $variant['price'] ?? $variant['cost'] ?? 0,
+                'stock' => $variant['stock'] ?? $variant['quantity'] ?? $variant['qty'] ?? $variant['inventory'] ?? 0,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private static function normalizeIsActive(array $item): bool
+    {
+        foreach (['isActive', 'active', 'is_active', 'enabled', 'status'] as $key) {
+            if (!array_key_exists($key, $item)) {
+                continue;
+            }
+
+            $value = $item[$key];
+            if (is_string($value)) {
+                $value = strtolower(trim($value));
+                if (in_array($value, ['active', 'enabled', 'available', 'published'], true)) {
+                    return true;
+                }
+                if (in_array($value, ['inactive', 'disabled', 'unavailable', 'draft'], true)) {
+                    return false;
+                }
+            }
+
+            return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return true;
+    }
+
+    private static function firstString(array $item, array $keys): string
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $item)) {
+                continue;
+            }
+
+            $value = trim((string) $item[$key]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private static function firstArray(array $item, array $keys): array
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $item) && is_array($item[$key])) {
+                return $item[$key];
+            }
+        }
+
+        return [];
     }
 }
