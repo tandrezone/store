@@ -438,8 +438,8 @@ class ProductImporter
                 'sku' => self::firstString($item, ['variant_sku', 'variantSku']),
                 'label' => self::firstString($item, ['label', 'size', 'pack', 'pack_size', 'packSize']),
                 'unit' => self::firstString($item, ['unit', 'unit_type', 'unitType']),
-                'price' => $item['price'] ?? $item['cost'] ?? null,
-                'stock' => $item['stock'] ?? $item['quantity'] ?? $item['qty'] ?? null,
+                'price' => $item['price'] ?? $item['cost'] ?? 0,
+                'stock' => $item['stock'] ?? $item['quantity'] ?? $item['qty'] ?? 0,
             ]];
         }
 
@@ -491,9 +491,6 @@ class ProductImporter
                 $value = strtolower(trim($value));
                 if (in_array($value, ['active', 'enabled', 'available', 'published'], true)) {
                     return true;
-                }
-                if (in_array($value, ['inactive', 'disabled', 'unavailable', 'draft'], true)) {
-                    return false;
                 }
 
                 return false;
