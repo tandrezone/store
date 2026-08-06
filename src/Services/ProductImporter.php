@@ -411,7 +411,11 @@ class ProductImporter
             return array_values($decoded);
         }
 
-        return [$decoded];
+        if (self::looksLikeProduct($decoded)) {
+            return [$decoded];
+        }
+
+        return [];
     }
 
     private static function normalizeItem(array $item): array
@@ -438,8 +442,9 @@ class ProductImporter
         $variants = self::firstArray($item, ['variants', 'options', 'variant_list', 'variantList']);
 
         if ($variants === [] && (isset($item['price']) || isset($item['cost']) || isset($item['stock']) || isset($item['quantity']) || isset($item['qty']) || isset($item['inventory']))) {
+            $variantSku = self::firstString($item, ['variant_sku', 'variantSku']);
             $variants = [[
-                'sku' => self::firstString($item, ['variant_sku', 'variantSku']),
+                'sku' => $variantSku !== '' ? $variantSku : $id,
                 'label' => self::firstString($item, ['label', 'size', 'pack', 'pack_size', 'packSize']),
                 'unit' => self::firstString($item, ['unit', 'unit_type', 'unitType']),
                 'price' => $item['price'] ?? $item['cost'] ?? 0,
@@ -544,5 +549,16 @@ class ProductImporter
         }
 
         return [];
+    }
+
+    private static function looksLikeProduct(array $item): bool
+    {
+        foreach (['id', 'product_id', 'productId', 'external_id', 'externalId', 'sku', 'code', 'name', 'title', 'product_name', 'productName'] as $key) {
+            if (array_key_exists($key, $item)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
