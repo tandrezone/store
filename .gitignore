@@ -3,3 +3,4 @@ public/assets/images/generated/
 .env.*
 !.env.example
 vendor/*
+public/admin/*

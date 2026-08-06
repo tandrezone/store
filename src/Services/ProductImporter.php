@@ -8,6 +8,7 @@ use PDO;
 use RuntimeException;
 use Store\Config\Database;
 use Store\Models\Supplier;
+use Store\Services\ImageDownloader;
 use Throwable;
 
 /**
@@ -23,6 +24,8 @@ use Throwable;
  *       "description": "Longer description",
  *       "category": { "name": "Category name (created if it doesn't exist yet)" },
  *       "isActive": true,
+ *       "image": "https://supplier.example/photos/main.jpg (optional, main photo)",
+ *       "images": ["https://supplier.example/photos/1.jpg (optional, gallery photos)"],
  *       "variants": [
  *         { "sku": "SUP-1", "label": "6", "unit": "pack", "price": 9.99, "stock": 50 }
  *       ]
@@ -32,9 +35,23 @@ use Throwable;
  *
  * Only items with isActive == true are imported. Re-running the import
  * matches existing rows by (supplier_id, external_id) and only updates
- * rows that are still import_status = 'imported' — manually created,
- * approved, or flagged (invalid/update) products are never touched by
- * an automated run.
+ * name/description/pricing/variants for rows that are still import_status
+ * = 'imported' — manually created, approved, or flagged (invalid/update)
+ * products keep the text and pricing an admin already reviewed.
+ *
+ * "image" and "images" are the one exception to that protection: they are
+ * downloaded via ImageDownloader and synced on every re-import regardless
+ * of status, since refreshing photos doesn't undo an admin's review the
+ * way overwriting the name/description/price would. The main photo
+ * becomes image_path, and the full set (main + gallery, deduped) becomes
+ * the images column that feeds the product detail slideshow. Existing
+ * image columns are left untouched if none of the URLs for an item can be
+ * downloaded, rather than being cleared out.
+ *
+ * variant.label and variant.unit are sanitized on the way in — label is
+ * stripped to digits only (pack quantity, e.g. "6 pack" -> "6") and unit
+ * to letters only (e.g. "5kg" -> "kg") — since suppliers mix the two
+ * freely and the storefront displays them as separate fields.
  */
 class ProductImporter
 {
@@ -154,8 +171,16 @@ class ProductImporter
         $existing = $stmt->fetch();
 
         if ($existing) {
+            $productId = (int) $existing['id'];
+
+            // Images refresh on every re-import, even after admin review —
+            // only the fields below (name/description/pricing/variants) are
+            // protected once a product leaves import_status = 'imported'.
+            self::syncImages($pdo, $productId, $item);
+
             if ($existing['import_status'] !== 'imported') {
-                // Manually reviewed since the last import — leave it alone.
+                // Manually reviewed since the last import — leave everything
+                // else alone.
                 return null;
             }
 
@@ -167,10 +192,10 @@ class ProductImporter
                 'name' => $name,
                 'short' => $shortDescription,
                 'long' => $longDescription,
-                'id' => $existing['id'],
+                'id' => $productId,
             ]);
 
-            self::syncVariants($pdo, (int) $existing['id'], (array) ($item['variants'] ?? []));
+            self::syncVariants($pdo, $productId, (array) ($item['variants'] ?? []));
 
             return 'updated';
         }
@@ -189,8 +214,49 @@ class ProductImporter
 
         $productId = (int) $pdo->lastInsertId();
         self::syncVariants($pdo, $productId, (array) ($item['variants'] ?? []));
+        self::syncImages($pdo, $productId, $item);
 
         return 'imported';
+    }
+
+    /**
+     * Downloads the item's "image" (main) and "images" (gallery) URLs and,
+     * if at least one succeeds, updates image_path (first downloaded image)
+     * and images (the full deduped list) for $productId. Leaves the
+     * existing columns untouched if every URL fails or none were provided,
+     * rather than clearing out a previously-downloaded set of images.
+     */
+    private static function syncImages(PDO $pdo, int $productId, array $item): void
+    {
+        $mainUrl = trim((string) ($item['image'] ?? ''));
+        $galleryUrls = array_map(
+            static fn ($url) => trim((string) $url),
+            array_values((array) ($item['images'] ?? []))
+        );
+
+        $urls = array_values(array_unique(array_filter(
+            array_merge($mainUrl !== '' ? [$mainUrl] : [], $galleryUrls),
+            static fn ($url) => $url !== ''
+        )));
+
+        $paths = [];
+        foreach ($urls as $url) {
+            $path = ImageDownloader::download($url, $productId);
+            if ($path !== null) {
+                $paths[] = $path;
+            }
+        }
+
+        if (empty($paths)) {
+            return;
+        }
+
+        $pdo->prepare('UPDATE products SET image_path = :image_path, images = :images WHERE id = :id')
+            ->execute([
+                'image_path' => $paths[0],
+                'images' => json_encode($paths),
+                'id' => $productId,
+            ]);
     }
 
     private static function resolveCategoryId(PDO $pdo, string $categoryName): int
@@ -224,8 +290,8 @@ class ProductImporter
                 $sku = 'SUP-' . $productId . '-' . ($index + 1);
             }
 
-            $label = trim((string) ($variant['label'] ?? '')) ?: null;
-            $unit = trim((string) ($variant['unit'] ?? '')) ?: null;
+            $label = self::digitsOnly((string) ($variant['label'] ?? ''));
+            $unit = self::lettersOnly((string) ($variant['unit'] ?? ''));
             $price = (float) ($variant['price'] ?? 0);
             // Suppliers that don't track stock send 0 or omit the field —
             // treat that as effectively unlimited rather than "out of stock".
@@ -255,6 +321,20 @@ class ProductImporter
                 'stock' => $stock,
             ]);
         }
+    }
+
+    /** Strips everything but digits, e.g. "6 pack" -> "6". */
+    private static function digitsOnly(string $value): ?string
+    {
+        $clean = preg_replace('/[^0-9]/', '', $value) ?? '';
+        return $clean !== '' ? $clean : null;
+    }
+
+    /** Strips everything but letters, e.g. "5kg" -> "kg". */
+    private static function lettersOnly(string $value): ?string
+    {
+        $clean = preg_replace('/[^A-Za-z]/', '', $value) ?? '';
+        return $clean !== '' ? $clean : null;
     }
 
     private static function slugify(string $value): string

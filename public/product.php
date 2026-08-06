@@ -23,8 +23,29 @@ require __DIR__ . '/partials/header.php';
 
 <section class="product-detail">
     <div class="product-detail-image">
-        <?php if (!empty($product['image_path'])): ?>
-            <img src="/<?= htmlspecialchars($product['image_path']) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
+        <?php $images = $product['images'] ?? []; ?>
+        <?php if (!empty($images)): ?>
+            <div class="product-gallery" data-gallery>
+                <div class="product-gallery-main">
+                    <?php foreach ($images as $i => $img): ?>
+                        <img src="/<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($product['name']) ?>"
+                             class="gallery-slide<?= $i === 0 ? ' is-active' : '' ?>" data-index="<?= $i ?>">
+                    <?php endforeach; ?>
+                    <?php if (count($images) > 1): ?>
+                        <button type="button" class="gallery-nav gallery-prev" aria-label="Previous image">&#8249;</button>
+                        <button type="button" class="gallery-nav gallery-next" aria-label="Next image">&#8250;</button>
+                    <?php endif; ?>
+                </div>
+                <?php if (count($images) > 1): ?>
+                    <div class="product-gallery-thumbs">
+                        <?php foreach ($images as $i => $img): ?>
+                            <button type="button" class="gallery-thumb<?= $i === 0 ? ' is-active' : '' ?>" data-index="<?= $i ?>">
+                                <img src="/<?= htmlspecialchars($img) ?>" alt="">
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
         <?php else: ?>
             <div class="image-placeholder">No image</div>
         <?php endif; ?>
