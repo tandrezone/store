@@ -21,6 +21,12 @@ class GeminiConfig
         return getenv('GEMINI_MODEL') ?: 'gemini-flash-latest';
     }
 
+    /** Image-generation/editing model — the text model above can't edit images. */
+    public static function imageModel(): string
+    {
+        return getenv('GEMINI_IMAGE_MODEL') ?: 'gemini-2.5-flash-image';
+    }
+
     public static function baseUrl(): string
     {
         return 'https://generativelanguage.googleapis.com/v1beta';

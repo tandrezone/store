@@ -19,9 +19,25 @@ use Throwable;
  * Pricing is deterministic, not LLM-generated — a language model asked to
  * "double this number attractively" is an unreliable source of arithmetic.
  * Only the name/description text comes from Gemini.
+ *
+ * Product photos are also cleaned up via Gemini's image model: any
+ * supplier-added text (watermarks, price stickers, logos baked into the
+ * shot) is edited out in place. This runs best-effort — an image that
+ * fails to edit (bad reply, network error, non-image file) is just left
+ * as downloaded rather than failing the whole product update, since the
+ * name/description/price rewrite is the part a re-run can't easily redo
+ * once the product leaves 'imported' status.
  */
 class ProductUpdater
 {
+    private const IMAGE_TEXT_REMOVAL_PROMPT = <<<PROMPT
+        Remove any text, watermarks, logos, price stickers, or labels
+        overlaid on this product photo. Keep the product itself, its
+        packaging, colors, proportions, and background exactly as they
+        are — only erase overlaid text/graphic elements and cleanly fill
+        in what was behind them. Return the edited image.
+        PROMPT;
+
     public static function runAll(): array
     {
         $pdo = Database::connection();
@@ -102,7 +118,86 @@ class ProductUpdater
             throw $e;
         }
 
+        self::removeTextFromImages($product);
+
         return true;
+    }
+
+    /**
+     * Best-effort: edits every image downloaded for this product to erase
+     * any overlaid text, overwriting the file in place so image_path/images
+     * (and every page that links them) keep pointing at the same path.
+     * Skips silently on any per-image failure.
+     */
+    private static function removeTextFromImages(array $product): void
+    {
+        foreach (self::imagePathsFor($product) as $relativePath) {
+            try {
+                self::removeTextFromImage($relativePath);
+            } catch (Throwable $e) {
+                // Leave the original image untouched — a failed edit isn't
+                // worth blocking or retrying the product update over.
+            }
+
+            // Same rate-limit pacing as the copy-generation loop, since this
+            // adds another Gemini call per image on top of it.
+            usleep(300000);
+        }
+    }
+
+    /** Main image_path plus the gallery images column, deduped. */
+    private static function imagePathsFor(array $product): array
+    {
+        $paths = [];
+
+        $main = trim((string) ($product['image_path'] ?? ''));
+        if ($main !== '') {
+            $paths[] = $main;
+        }
+
+        $gallery = json_decode((string) ($product['images'] ?? ''), true);
+        foreach ((array) $gallery as $path) {
+            $path = trim((string) $path);
+            if ($path !== '') {
+                $paths[] = $path;
+            }
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    /**
+     * Sends the image at $relativePath (relative to /public) to Gemini and
+     * overwrites it with the edited result. Throws on any failure — the
+     * caller treats that as "leave this one image alone".
+     */
+    private static function removeTextFromImage(string $relativePath): void
+    {
+        $fullPath = __DIR__ . '/../../public/' . $relativePath;
+        if (!is_file($fullPath)) {
+            return;
+        }
+
+        $data = file_get_contents($fullPath);
+        if ($data === false) {
+            throw new RuntimeException("Could not read {$relativePath}.");
+        }
+
+        $mime = @getimagesizefromstring($data)['mime'] ?? null;
+        if ($mime === null) {
+            throw new RuntimeException("{$relativePath} is not a readable image.");
+        }
+
+        $edited = (new GeminiClient())->editImage($data, $mime, self::IMAGE_TEXT_REMOVAL_PROMPT);
+        if (@getimagesizefromstring($edited) === false) {
+            throw new RuntimeException("Gemini's reply for {$relativePath} was not a valid image.");
+        }
+
+        // Write to a temp file and rename into place — rename() is atomic,
+        // so a concurrent request never sees a half-written file.
+        $tmpPath = $fullPath . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        file_put_contents($tmpPath, $edited);
+        rename($tmpPath, $fullPath);
     }
 
     /**
