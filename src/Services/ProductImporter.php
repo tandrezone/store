@@ -407,7 +407,11 @@ class ProductImporter
             }
         }
 
-        return array_values($decoded);
+        if (array_is_list($decoded)) {
+            return array_values($decoded);
+        }
+
+        return [$decoded];
     }
 
     private static function normalizeItem(array $item): array
@@ -433,7 +437,7 @@ class ProductImporter
         $images = self::firstArray($item, ['images', 'gallery', 'photos', 'image_urls', 'imageUrls']);
         $variants = self::firstArray($item, ['variants', 'options', 'variant_list', 'variantList']);
 
-        if ($variants === [] && (isset($item['price']) || isset($item['cost']) || isset($item['stock']) || isset($item['quantity']) || isset($item['qty']))) {
+        if ($variants === [] && (isset($item['price']) || isset($item['cost']) || isset($item['stock']) || isset($item['quantity']) || isset($item['qty']) || isset($item['inventory']))) {
             $variants = [[
                 'sku' => self::firstString($item, ['variant_sku', 'variantSku']),
                 'label' => self::firstString($item, ['label', 'size', 'pack', 'pack_size', 'packSize']),
