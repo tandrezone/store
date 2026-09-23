@@ -6,3 +6,4 @@ vendor/*
 public/admin/*
 vendor/composer/*
 vendor/composer/autoload_static.php
+rsync.sh
